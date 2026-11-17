@@ -10,6 +10,8 @@ export default defineConfig({
   timeout: 120_000,
   fullyParallel: false,
   workers: 1,
+  // One retry for infrastructure flakes (e.g. "Unable to capture screenshot"); Playwright still reports them as flaky.
+  retries: 1,
   reporter: [['list']],
   use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
   projects: [
