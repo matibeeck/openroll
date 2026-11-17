@@ -73,6 +73,26 @@ export const en = {
   'download.midi': 'Download MIDI',
   'download.musicxml': 'Download MusicXML',
   'download.hint': 'Files are generated on your device.',
+  'error.unsupported':
+    "Your browser couldn't read the audio in {name}. The format or codec may not be supported here (for example FLAC or MOV on some browsers), or the video has no sound track. Convert it to MP3 or WAV, or try Chrome or Firefox.",
+  'error.silent': '{name} has no audible sound to transcribe.',
+  'error.too-large': '{name} is too large to load in this browser. Try a shorter clip, or extract just the audio (MP3/WAV) first.',
+  'error.no-webaudio': 'This browser has no Web Audio support, so it cannot read audio files.',
+  'error.video-unsupported':
+    "Your browser couldn't play {name}. Its format or codec may not be supported here; try an MP4 (H.264) or WebM file, or Chrome or Firefox.",
+  'error.no-keyboard':
+    'No piano keyboard was found in {name}. Use a falling-notes video that shows the whole keyboard, or set its position by hand.',
+  'calibrate.title': 'Where is the keyboard?',
+  'calibrate.hint': 'Line up the red frame with the piano keys. Drag its left and right ends, or type the values.',
+  'calibrate.unsure': "We couldn't find the keyboard for sure. Please check it.",
+  'calibrate.left': 'Left end',
+  'calibrate.right': 'Right end',
+  'calibrate.top': 'Top of keys',
+  'calibrate.bottom': 'Bottom of keys',
+  'calibrate.keys': 'Number of keys',
+  'calibrate.lowest': 'Lowest key',
+  'calibrate.ok': 'Use this keyboard',
+  'calibrate.cancel': 'Cancel',
 } as const;
 
 export type Messages = Record<keyof typeof en, string>;

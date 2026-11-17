@@ -75,4 +75,24 @@ export const es: Messages = {
   'download.midi': 'Descargar MIDI',
   'download.musicxml': 'Descargar MusicXML',
   'download.hint': 'Los archivos se generan en tu dispositivo.',
+  'error.unsupported':
+    'Tu navegador no pudo leer el audio de {name}. Puede que el formato o el códec no sean compatibles aquí (por ejemplo FLAC o MOV en algunos navegadores) o que el video no tenga sonido. Conviértelo a MP3 o WAV, o prueba con Chrome o Firefox.',
+  'error.silent': '{name} no tiene sonido audible para transcribir.',
+  'error.too-large': '{name} es demasiado grande para cargarlo en este navegador. Prueba con un fragmento más corto o extrae primero solo el audio (MP3/WAV).',
+  'error.no-webaudio': 'Este navegador no es compatible con Web Audio, así que no puede leer archivos de audio.',
+  'error.video-unsupported':
+    'Tu navegador no pudo reproducir {name}. Puede que el formato o el códec no sean compatibles aquí; prueba con un MP4 (H.264) o WebM, o con Chrome o Firefox.',
+  'error.no-keyboard':
+    'No se encontró un teclado de piano en {name}. Usa un video de notas que caen que muestre el teclado completo, o indica su posición a mano.',
+  'calibrate.title': '¿Dónde está el teclado?',
+  'calibrate.hint': 'Alinea el marco rojo con las teclas del piano. Arrastra sus extremos izquierdo y derecho o escribe los valores.',
+  'calibrate.unsure': 'No pudimos encontrar el teclado con seguridad. Por favor revísalo.',
+  'calibrate.left': 'Extremo izquierdo',
+  'calibrate.right': 'Extremo derecho',
+  'calibrate.top': 'Borde superior de las teclas',
+  'calibrate.bottom': 'Borde inferior de las teclas',
+  'calibrate.keys': 'Número de teclas',
+  'calibrate.lowest': 'Tecla más grave',
+  'calibrate.ok': 'Usar este teclado',
+  'calibrate.cancel': 'Cancelar',
 };

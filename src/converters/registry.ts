@@ -1,4 +1,5 @@
 import { audioInput } from './inputs/audio';
+import { fallingNotesVideoInput } from './inputs/falling-notes-video';
 import { midiInput } from './inputs/midi';
 import { musicXmlInput } from './inputs/musicxml';
 import { performanceVideoInput } from './inputs/performance-video';
@@ -7,7 +8,7 @@ import { musicXmlOutput } from './outputs/musicxml';
 import type { InputConverter, OutputConverter } from './types';
 
 /** All input converters, in detection priority order. Filled in by later milestones. */
-export const inputConverters: InputConverter[] = [midiInput, musicXmlInput, audioInput, performanceVideoInput];
+export const inputConverters: InputConverter[] = [midiInput, musicXmlInput, audioInput, performanceVideoInput, fallingNotesVideoInput];
 
 /** All output converters. */
 export const outputConverters: OutputConverter[] = [midiOutput, musicXmlOutput];

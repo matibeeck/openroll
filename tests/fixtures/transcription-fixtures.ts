@@ -115,3 +115,40 @@ export function twoHandPiece(): Score {
     ['Right hand', 'Left hand'],
   );
 }
+
+/**
+ * Hard case for frame-based recognition: fast repeated notes (sixteenths at 132 bpm, ~114 ms),
+ * trills, chords and onsets that do not fall on a 30 fps frame grid (seeded timing jitter).
+ */
+export function fastRepeatsPiece(): Score {
+  let s = 12345;
+  const rand = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const spb = 60 / 132;
+  const notes: Note[] = [];
+  const add = (pitch: number, beat: number, len: number, hand: Hand) => {
+    const jitter = (rand() - 0.5) * 0.02;
+    notes.push({ pitch, start: Math.max(0, beat * spb + 0.013 + jitter), duration: len * spb * 0.85, velocity: 0.7, hand, track: hand === 'L' ? 1 : 0 });
+  };
+  // Bars 1–2: repeated sixteenths on one key, then a trill.
+  for (let i = 0; i < 8; i++) add(G4, i * 0.25, 0.25, 'R');
+  for (let i = 0; i < 8; i++) add(i % 2 ? D5 : C5, 2 + i * 0.25, 0.25, 'R');
+  for (let i = 0; i < 4; i++) add(C3, i, 1, 'L');
+  // Bars 3–4: repeated chords in eighths over a moving bass.
+  for (let i = 0; i < 8; i++) for (const p of [E4, G4, C5]) add(p, 4 + i * 0.5, 0.5, 'R');
+  for (let i = 0; i < 4; i++) add([C3, A2, F2, G2][i]!, 4 + i, 1, 'L');
+  // Bar 5: fast scale with a repeated bass.
+  [C4, D4, E4, F4, G4, A4, B4, C5].forEach((p, i) => add(p, 8 + i * 0.25, 0.25, 'R'));
+  for (let i = 0; i < 8; i++) add(C2, 8 + i * 0.25, 0.25, 'L');
+  return createScore({
+    title: 'Fixture: fast repeats',
+    notes,
+    tracks: [
+      { name: 'Right hand', hand: 'R' },
+      { name: 'Left hand', hand: 'L' },
+    ],
+    tempos: [{ time: 0, bpm: 132 }],
+  });
+}

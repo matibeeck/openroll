@@ -46,10 +46,10 @@ Accept: e2e exports a 10-second clip; it plays and its duration is within ±0.2 
 Accept: F1 ≥ 0.85 monophonic, ≥ 0.70 two-hand. If missed, record the numbers; better models are phase 2.
 
 ## M5 — Falling-notes video → notes
-- [ ] Frame sampling (requestVideoFrameCallback or seek stepping) into a canvas.
-- [ ] Keyboard calibration: auto-detect the keyboard strip and key positions; manual adjust (ends, 88/76/61 keys, lowest key).
-- [ ] Detection: per key, compare against its idle color (and/or bars crossing a line just above the keys), debounce, emit note on/off, infer hand from color clusters.
-- [ ] Round-trip test: fixture Scores → `renderFrame` (several themes/colors) → detector → F1; plus one encoded WebM from M3 in e2e.
+- [x] Frame sampling (requestVideoFrameCallback or seek stepping) into a canvas.
+- [x] Keyboard calibration: auto-detect the keyboard strip and key positions; manual adjust (ends, 88/76/61 keys, lowest key).
+- [x] Detection: per key, compare against its idle color (and/or bars crossing a line just above the keys), debounce, emit note on/off, infer hand from color clusters.
+- [x] Round-trip test: fixture Scores → `renderFrame` (several themes/colors) → detector → F1; plus one encoded WebM from M3 in e2e.
 
 Accept: F1 ≥ 0.95 on generated frames; manual calibration works.
 
