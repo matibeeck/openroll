@@ -35,7 +35,7 @@ test('unknown file types and undecodable audio show clear, translated errors', a
   await page.goto('/?lang=es');
   await openFile(page, writeTemp('notes.txt', 'hello'));
   await expect(page.getByRole('alert')).toContainText('Tipo de archivo no soportado: notes.txt');
-  await openFile(page, writeTemp('silence.wav', silentWav()));
+  await openFile(page, writeTemp('silence.wav', silentWav()), 'fast');
   await expect(page.getByRole('alert')).toContainText('silence.wav', { timeout: 60_000 });
   // The error comes from the converter's code, translated (not the English fallback message).
   const text = (await page.getByRole('alert').textContent()) ?? '';

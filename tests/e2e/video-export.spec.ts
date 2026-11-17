@@ -81,7 +81,7 @@ test('video export options: 1080p, 60 fps, light theme, labels', async ({ page }
 test('video exported from a transcribed recording has audible sound', async ({ page }) => {
   const melody = Array.from({ length: 10 }, (_, i) => [60 + (i % 5) * 2, 0.25 + i * 0.4, 0.35] as [number, number, number]);
   await page.goto('/?lang=en&clip=4');
-  await openFile(page, writeTemp('rec.wav', synthWav(melody)));
+  await openFile(page, writeTemp('rec.wav', synthWav(melody)), 'fast');
   await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 90_000 });
   await page.getByRole('tab', { name: 'Video' }).click();
   await page.getByTestId('export-video').click();

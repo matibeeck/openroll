@@ -10,7 +10,7 @@ test('audio → notes → MIDI download', async ({ page }) => {
   const scale = [60, 62, 64, 65, 67, 69, 71, 72];
   const wav = synthWav(scale.map((p, i) => [p, 0.25 + i * 0.5, 0.45] as [number, number, number]));
   await page.goto('/?lang=en');
-  await openFile(page, writeTemp('scale.wav', wav));
+  await openFile(page, writeTemp('scale.wav', wav), 'fast');
   await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 90_000 });
   await settledScreenshot(page, 'docs/screenshots/audio-practice.png');
   await page.getByRole('tab', { name: 'Download' }).click();
@@ -27,7 +27,7 @@ test('audio → sheet: tempo, tap tempo, time signature and zoom controls for fr
   // 24 notes, 0.4 s apart (150 BPM eighth-ish), so the sheet spans several bars.
   const melody = Array.from({ length: 24 }, (_, i) => [60 + ((i * 5) % 13), 0.25 + i * 0.4, 0.35] as [number, number, number]);
   await page.goto('/?lang=en');
-  await openFile(page, writeTemp('melody.wav', synthWav(melody)));
+  await openFile(page, writeTemp('melody.wav', synthWav(melody)), 'fast');
   await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 90_000 });
   await page.getByRole('tab', { name: 'Sheet' }).click();
   const sheet = page.getByTestId('sheet');

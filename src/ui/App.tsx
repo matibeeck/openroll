@@ -3,11 +3,12 @@ import type { Score } from '../core/score';
 import { scoreDuration } from '../core/score';
 import { converterIdFor, detectKind } from '../converters/detect';
 import { demoScore } from '../core/demo';
-import { prewarmAudioTranscriber } from '../converters/inputs/audio';
+import { DEFAULT_TRANSCRIPTION_MODE, prewarmAudioTranscriber, type TranscriptionMode } from '../converters/inputs/audio';
 import { findInputConverter } from '../converters/registry';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import { en, type Messages } from '../i18n/en';
 import { useCalibrationPrompt } from './CalibrationDialog';
+import { ModeChoice } from './ModeChoice';
 import { PracticeView } from './PracticeView';
 import { VideoView } from './VideoView';
 import { defaultSheetSettings, type SheetSettings } from './sheetSettings';
@@ -20,6 +21,7 @@ type Tab = 'practice' | 'sheet' | 'video' | 'download';
 type State =
   | { kind: 'home'; error?: string }
   | { kind: 'ask-video'; file: File }
+  | { kind: 'ask-mode'; file: File; videoMode?: 'performance' }
   | { kind: 'converting'; file: File; progress: number; label?: string; startedAt: number }
   | {
       kind: 'result';
@@ -45,13 +47,22 @@ function Shell() {
   const idRef = useRef(0);
   const { dialog, calibrate } = useCalibrationPrompt();
 
-  const convert = async (file: File, videoMode?: 'falling-notes' | 'performance', recalibrate = false) => {
+  const convert = async (
+    file: File,
+    videoMode?: 'falling-notes' | 'performance',
+    recalibrate = false,
+    mode?: TranscriptionMode,
+  ) => {
     const kind = detectKind(file.name, file.type);
     if (kind === 'unknown') return setState({ kind: 'home', error: t('home.unknown', { name: file.name }) });
-    // Start loading the note model while the file is decoded (or while the user answers the video question).
-    if (kind === 'audio' || (kind === 'video' && videoMode !== 'falling-notes')) prewarmAudioTranscriber();
+    // Start loading the fast note model while the file is decoded (or while the user answers the questions).
+    if ((kind === 'audio' || (kind === 'video' && videoMode !== 'falling-notes')) && (mode ?? DEFAULT_TRANSCRIPTION_MODE) === 'fast')
+      prewarmAudioTranscriber();
     if (kind === 'video' && !videoMode) return setState({ kind: 'ask-video', file });
     const id = converterIdFor(kind, videoMode);
+    // Audio and performance videos: fast (any instrument) or high precision (piano)?
+    if ((id === 'audio' || id === 'performance-video') && !mode)
+      return setState({ kind: 'ask-mode', file, videoMode: videoMode === 'performance' ? 'performance' : undefined });
     const conv = id ? findInputConverter(id) : undefined;
     if (!conv) return setState({ kind: 'home', error: t('home.unknown', { name: file.name }) });
     const ac = new AbortController();
@@ -59,7 +70,7 @@ function Shell() {
     const startedAt = performance.now();
     setState({ kind: 'converting', file, progress: 0, startedAt });
     try {
-      const opts = id === 'falling-notes-video' ? { calibrate, alwaysCalibrate: recalibrate } : {};
+      const opts = id === 'falling-notes-video' ? { calibrate, alwaysCalibrate: recalibrate } : { mode };
       const score = await conv.convert(
         file,
         opts,
@@ -99,10 +110,12 @@ function Shell() {
     return () => window.clearInterval(id);
   }, [converting]);
 
+  // Labels may carry values after the stage name: `downloading-model:<done>:<total>`.
   const stageText = (label?: string) => {
     if (!label) return '';
-    const key = `stage.${label}` as keyof Messages;
-    return key in en ? t(key) : label;
+    const [name, done, total] = label.split(':');
+    const key = `stage.${name}` as keyof Messages;
+    return key in en ? t(key, { done: done ?? '', total: total ?? '' }) : label;
   };
   const eta = (s: { progress: number; startedAt: number }) => {
     const elapsed = (now - s.startedAt) / 1000;
@@ -204,6 +217,13 @@ function Shell() {
             </button>
           </div>
         </main>
+      )}
+
+      {state.kind === 'ask-mode' && (
+        <ModeChoice
+          onChoose={(mode) => void convert(state.file, state.videoMode, false, mode)}
+          onCancel={() => setState({ kind: 'home' })}
+        />
       )}
 
       {state.kind === 'converting' && (

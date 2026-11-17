@@ -83,6 +83,11 @@ Accept: Playwright e2e for each flow (MIDI → practice, MusicXML → sheet, aud
 
 ## Phase 2 — do NOT build now (list it in REPORTE.md)
 - Sheet music photo/PDF → notes (OMR) as a separate service (e.g. a Hugging Face ZeroGPU Space); check model licenses first.
-- Transkun ONNX for more accurate piano transcription; live microphone input.
+- ~~Transkun ONNX for more accurate piano transcription~~ (done in round 3, see below); live microphone input.
 - MP4 export; native iPad wrapper (Web MIDI is missing on iOS).
 - Optional AI extras (explain a piece, practice plans) — never required by core features.
+
+## Round 3 — high-precision piano mode
+- [x] Transkun (MIT) on onnxruntime-web in a worker (WebGPU, WASM fallback), model fetched at setup into `public/models/transkun/` (SHA-256), never precached; mode question fast vs high precision for audio and performance videos.
+- [x] TS front end + semi-CRF Viterbi + segment stitching checked against the reference tensors (default suite) and the upstream PyTorch pipeline (opt-in `TRANSKUN=1`); e2e picks high precision and gets notes.
+- [ ] Compare both modes on the real recording and the evaluation fixtures; choose the default from the numbers.

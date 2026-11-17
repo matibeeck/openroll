@@ -12,6 +12,7 @@ export type TimingStage =
   | 'resample'
   | 'downmix'
   | 'wait-model'
+  | 'download'
   | 'backend'
   | 'model-load'
   | 'warmup'

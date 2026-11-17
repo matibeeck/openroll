@@ -19,6 +19,11 @@ Everything runs in your browser. No backend, no accounts, no API keys. Your file
 | Performance video | .mp4, .webm, .mov (audio track is transcribed) |
 | Falling-notes video | .mp4, .webm, .mov (keyboard is calibrated and read frame by frame) |
 
+Audio and performance videos offer two modes:
+
+- **Fast** — [Basic Pitch](https://github.com/spotify/basic-pitch-ts) (any instrument, ~1 MB model, a few seconds).
+- **High precision (piano)** — [Transkun](https://github.com/Yujia-Yan/Transkun) on onnxruntime-web (WebGPU, or WebAssembly as fallback): a piano-specific model that hears fuller chords, plus sustain pedal and dynamics; slower. Its ~86 MB (model + runtime) are downloaded from the app's own server the first time you pick it, then cached for offline use. `npm ci` / `npm run build` put the model in `public/models/transkun/` (`scripts/fetch-transkun.mjs`, SHA-256 checked); the running app never contacts another host.
+
 ## Development
 
 ```bash
@@ -28,6 +33,7 @@ npm run dev        # dev server
 npm run check      # typecheck + lint + unit/round-trip tests + license audit
 npm run test:e2e   # Playwright (Chromium)
 npm run build      # static build in dist/
+TRANSKUN=1 npx vitest run tests/roundtrip/transkun.test.ts   # opt-in: high-precision mode with the real model
 ```
 
 ## Architecture

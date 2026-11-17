@@ -5,9 +5,9 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-models.mjs",
+    "predev": "node scripts/copy-models.mjs && node scripts/fetch-transkun.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/copy-models.mjs",
+    "prebuild": "node scripts/copy-models.mjs && node scripts/fetch-transkun.mjs",
     "build": "tsc -b tsconfig.app.json tsconfig.node.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
@@ -17,13 +17,14 @@
     "test:e2e": "playwright test",
     "licenses": "node scripts/licenses.mjs",
     "check": "npm run typecheck && npm run lint && npm run test && npm run licenses",
-    "postinstall": "node scripts/copy-models.mjs",
+    "postinstall": "node scripts/copy-models.mjs && node scripts/fetch-transkun.mjs",
     "tune:audio": "node scripts/tune-audio-postprocess.mjs",
     "real-check:sheet": "playwright test -c scripts/real-check/sheet.config.ts"
   },
   "dependencies": {
     "@spotify/basic-pitch": "^1.0.1",
     "@tonejs/midi": "^2.0.28",
+    "onnxruntime-web": "1.31.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tone": "^15.1.22",

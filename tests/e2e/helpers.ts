@@ -42,8 +42,13 @@ export function writeTemp(name: string, data: Uint8Array | string): string {
   return p;
 }
 
-export async function openFile(page: Page, path: string) {
+/**
+ * Opens a file through the picker. Audio files (and performance videos) then ask fast vs high
+ * precision: pass `mode` to answer that question.
+ */
+export async function openFile(page: Page, path: string, mode?: 'fast' | 'precise') {
   await page.getByTestId('file-input').setInputFiles(path);
+  if (mode) await page.getByTestId(`mode-${mode}`).click();
 }
 
 /** 16-bit mono WAV of a piano-like tone per note: [midi pitch, start s, duration s]. */

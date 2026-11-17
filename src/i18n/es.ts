@@ -125,4 +125,12 @@ export const es: Messages = {
   'video.estimate': 'Exportar toma unos {time} (el video se graba en tiempo real).',
   'practice.score.idle': 'Toca junto con la música y aquí verás tus aciertos y tu precisión.',
   'stage.loading-model': 'cargando el modelo de notas',
+  'mode.question': '¿Cómo quieres que OpenRoll escuche?',
+  'mode.fast': 'Rápido',
+  'mode.fast.hint': 'Cualquier instrumento · empieza enseguida',
+  'mode.precise': 'Alta precisión (piano)',
+  'mode.precise.hint': 'Solo piano · acordes más completos, pedal y dinámica · más lento · descarga de {size} MB la primera vez',
+  'mode.precise.ready': 'Solo piano · acordes más completos, pedal y dinámica · más lento · ya está descargado',
+  'stage.downloading-model': 'descargando el modelo de piano ({done} de {total} MB, solo la primera vez)',
+  'error.model-missing': 'El modelo de piano de alta precisión no está instalado en esta copia de OpenRoll. Usa el modo rápido.',
 };

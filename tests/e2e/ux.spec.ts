@@ -83,7 +83,7 @@ test('mobile practice view paints (no black canvas after resize)', async ({ page
 test('conversion shows the stage in the UI language and a time estimate', async ({ page }) => {
   const melody = Array.from({ length: 60 }, (_, i) => [55 + ((i * 7) % 17), 0.25 + i * 0.3, 0.28] as [number, number, number]);
   await page.goto('/?lang=es');
-  await openFile(page, writeTemp('eta.wav', synthWav(melody)));
+  await openFile(page, writeTemp('eta.wav', synthWav(melody)), 'fast');
   await expect(page.getByTestId('convert-eta')).toHaveText(/calculando|quedan/);
   await expect(page.getByTestId('convert-status')).not.toContainText(/transcribing|decoding|reading/);
   await settledScreenshot(page, 'docs/screenshots/converting.png');

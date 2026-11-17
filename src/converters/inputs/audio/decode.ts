@@ -53,13 +53,15 @@ export interface DecodedAudio {
 }
 
 /**
- * Reads and decodes `file` to 22,050 Hz channels. `onStage` reports 'reading' then 'decoding'.
+ * Reads and decodes `file` to channels at `sampleRate` (default 22,050 Hz, Basic Pitch's; the
+ * high-precision mode asks for 44,100 Hz). `onStage` reports 'reading' then 'decoding'.
  * Throws AudioDecodeError for unsupported/oversized files and AbortError when cancelled.
  */
 export async function decodeAudioChannels(
   file: Blob & { name?: string },
   signal?: AbortSignal,
   onStage: (stage: 'reading' | 'decoding') => void = () => {},
+  sampleRate = BASIC_PITCH_SAMPLE_RATE,
 ): Promise<DecodedAudio> {
   const Ctor = offlineContextCtor();
   if (!Ctor) {
@@ -83,7 +85,7 @@ export async function decodeAudioChannels(
   onStage('decoding');
   let decoded: AudioBuffer;
   try {
-    decoded = await timed('decode', () => new Ctor(1, 1, BASIC_PITCH_SAMPLE_RATE).decodeAudioData(bytes));
+    decoded = await timed('decode', () => new Ctor(1, 1, sampleRate).decodeAudioData(bytes));
   } catch {
     throw new AudioDecodeError(
       'unsupported',
@@ -94,9 +96,9 @@ export async function decodeAudioChannels(
   }
   throwIfAborted(signal);
 
-  if (decoded.sampleRate !== BASIC_PITCH_SAMPLE_RATE) {
+  if (decoded.sampleRate !== sampleRate) {
     const src = decoded;
-    decoded = await timed('resample', () => renderAt22k(Ctor, src));
+    decoded = await timed('resample', () => renderAt(Ctor, src, sampleRate));
   }
 
   // Copies (memcpy) so the buffers can be transferred to the worker independently of the AudioBuffer.
@@ -117,9 +119,9 @@ export async function decodeToMono22k(file: Blob & { name?: string }, signal?: A
 }
 
 /** Fallback resampler for browsers that ignore the context rate in decodeAudioData. */
-async function renderAt22k(Ctor: OfflineCtor, buffer: AudioBuffer): Promise<AudioBuffer> {
-  const length = Math.ceil(buffer.duration * BASIC_PITCH_SAMPLE_RATE);
-  const ctx = new Ctor(1, Math.max(1, length), BASIC_PITCH_SAMPLE_RATE);
+async function renderAt(Ctor: OfflineCtor, buffer: AudioBuffer, sampleRate: number): Promise<AudioBuffer> {
+  const length = Math.ceil(buffer.duration * sampleRate);
+  const ctx = new Ctor(1, Math.max(1, length), sampleRate);
   const src = ctx.createBufferSource();
   src.buffer = buffer;
   src.connect(ctx.destination);

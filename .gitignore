@@ -11,5 +11,5 @@ test-results/
 .claude/agent-memory-local/
 dev-dist/
 
-# Model files copied from node_modules by scripts/copy-models.mjs
+# Model files copied from node_modules by scripts/copy-models.mjs and downloaded by scripts/fetch-transkun.mjs
 public/models/

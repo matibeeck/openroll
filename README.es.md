@@ -19,6 +19,11 @@ Todo corre en tu navegador. Sin servidor, sin cuentas, sin claves de API. Tus ar
 | Video de interpretación | .mp4, .webm, .mov (se transcribe el audio) |
 | Video de notas que caen | .mp4, .webm, .mov (se calibra el teclado y se lee cuadro a cuadro) |
 
+El audio y los videos de interpretación tienen dos modos:
+
+- **Rápido** — [Basic Pitch](https://github.com/spotify/basic-pitch-ts) (cualquier instrumento, modelo de ~1 MB, unos segundos).
+- **Alta precisión (piano)** — [Transkun](https://github.com/Yujia-Yan/Transkun) sobre onnxruntime-web (WebGPU, o WebAssembly si no hay): un modelo específico de piano que oye acordes más completos, además del pedal y la dinámica; más lento. Sus ~86 MB (modelo + runtime) se descargan del propio servidor de la app la primera vez que lo eliges y quedan guardados para usarlo sin conexión. `npm ci` / `npm run build` dejan el modelo en `public/models/transkun/` (`scripts/fetch-transkun.mjs`, verificado con SHA-256); la app nunca se conecta a otro servidor.
+
 ## Desarrollo
 
 ```bash
@@ -28,6 +33,7 @@ npm run dev        # servidor de desarrollo
 npm run check      # tipos + lint + tests unitarios/round-trip + auditoría de licencias
 npm run test:e2e   # Playwright (Chromium)
 npm run build      # build estático en dist/
+TRANSKUN=1 npx vitest run tests/roundtrip/transkun.test.ts   # opcional: modo alta precisión con el modelo real
 ```
 
 ## Arquitectura

@@ -123,6 +123,14 @@ export const en = {
   'video.estimate': 'Exporting takes about {time} (the video is recorded in real time).',
   'practice.score.idle': 'Play along and your hits and accuracy will show up here.',
   'stage.loading-model': 'loading the note model',
+  'mode.question': 'How should OpenRoll listen?',
+  'mode.fast': 'Fast',
+  'mode.fast.hint': 'Any instrument · starts right away',
+  'mode.precise': 'High precision (piano)',
+  'mode.precise.hint': 'Piano only · fuller chords, sustain pedal and dynamics · slower · {size} MB download the first time',
+  'mode.precise.ready': 'Piano only · fuller chords, sustain pedal and dynamics · slower · already downloaded',
+  'stage.downloading-model': 'downloading the piano model ({done} of {total} MB, only the first time)',
+  'error.model-missing': 'The high-precision piano model is not installed in this copy of OpenRoll. Use the fast mode.',
 } as const;
 
 export type Messages = Record<keyof typeof en, string>;

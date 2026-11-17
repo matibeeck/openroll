@@ -258,3 +258,31 @@ button.icon {
   text-decoration: underline;
   cursor: pointer;
 }
+.mode-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  max-width: 720px;
+}
+.mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 260px;
+  max-width: 340px;
+  padding: 16px;
+  text-align: left;
+  border-radius: 12px;
+}
+.mode-option strong {
+  font-size: 1.1rem;
+}
+.mode-option span {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.mode-option.primary span {
+  color: #052e16;
+}
