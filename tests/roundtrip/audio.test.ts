@@ -73,8 +73,11 @@ describe('audio → Score round trip (Basic Pitch)', () => {
   test('two-hand piece: F1 ≥ 0.70', async () => {
     const ref = twoHandPiece();
     const { metrics, score } = await roundTrip('two-hand', ref, synthesizeScore(ref, { seed: 2 }));
-    report(`[audio] two-hand: hand assignment agrees with the fixture on ${(handAgreement(ref, score) * 100).toFixed(1)}% of matched notes`);
+    const agreement = handAgreement(ref, score);
+    report(`[audio] two-hand: hand assignment agrees with the fixture on ${(agreement * 100).toFixed(1)}% of matched notes`);
     expect(metrics.f1).toBeGreaterThanOrEqual(0.7);
+    // No PLAN target for hands; this floor guards against regressions (measured 92.9%).
+    expect(agreement).toBeGreaterThanOrEqual(0.8);
   });
 
   test('two-hand piece with sustain pedal, reverb and noise (informational, no PLAN target)', async () => {
@@ -88,7 +91,8 @@ describe('audio → Score round trip (Basic Pitch)', () => {
     const audio = addReverb(synthesizeScore(pedalled, { seed: 3, noiseFloor: 0.01 }), BASIC_PITCH_SAMPLE_RATE, 1.5, 0.35);
     const { metrics } = await roundTrip('two-hand stress', ref, audio);
     // Reported, not asserted: PLAN.md has no target for this condition. Sanity floor only.
-    expect(metrics.f1).toBeGreaterThan(0);
+    // Informational case with no PLAN target; floor guards regressions (measured 94.0%).
+    expect(metrics.f1).toBeGreaterThanOrEqual(0.8);
   });
 
   test('cancel stops inference between windows', async () => {
