@@ -18,7 +18,7 @@ import { isFreeTiming } from '../../src/core/quantize';
 import type { Score } from '../../src/core/score';
 import { withVerovio } from '../../src/core/verovio';
 import { defaultSheetSettings, quantizeOptions, sheetEstimate } from '../../src/ui/sheetSettings';
-import { BALLADE_SPELLING, performedBallade } from '../fixtures/ballade';
+import { BALLADE_SPELLING, fMajorOverPedal, performed, performedBallade } from '../fixtures/ballade';
 import { loadBasicPitchModelNode } from './basic-pitch-node';
 import { formatMetrics, noteF1, report } from './metrics';
 import { synthesizeScore } from './synth';
@@ -142,5 +142,22 @@ describe('recording → readable sheet (Ballade No. 3 theme, synthetic audio)', 
 
     await loadsInVerovio(xml);
     await loadsInVerovio(simple);
+  });
+
+  test('F-major theme of repeated Cs over a C pedal: 6/8, one flat, no sharps', async () => {
+    const reference = performed(fMajorOverPedal);
+    const score = postprocess(decodeNotes(await runModel(model, synthesizeScore(reference, { seed: 5 }))), { title: 'F over C pedal' });
+    const f1 = noteF1(reference.notes, score.notes, ONSET_TOLERANCE);
+    report(`[sheet-recording] F over C pedal: ${formatMetrics('transcription', f1)}`);
+    const free = isFreeTiming(score);
+    const settings = defaultSheetSettings(score, free);
+    const xml = scoreToMusicXml(score, quantizeOptions(score, free, settings));
+    const after = sheetStats(xml);
+    report(`[sheet-recording] F over C pedal: ${fmt(after)}, tempo ♩. = ${settings.bpmText}`);
+    expect(after.time).toBe('6/8');
+    expect(after.fifths).toBe(-1);
+    expect(after.sharps).toBe(0);
+    expect(after.restsPerStaffBar).toBeLessThanOrEqual(MAX_RESTS_PER_STAFF_BAR);
+    await loadsInVerovio(xml);
   });
 });

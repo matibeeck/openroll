@@ -393,7 +393,9 @@ function correlation(a: number[], b: number[]): number {
 /**
  * Krumhansl–Schmuckler key estimate (Temperley's profiles) from a pitch-class histogram weighted
  * by duration (capped at 1.5 s, so pedalled or decaying notes do not dominate) with bass notes
- * (lowest of their onset, below C4) counted twice: the bass carries the harmony.
+ * (lowest of their onset, below C4) counted twice: the bass carries the harmony. The signature
+ * is then settled against its circle-of-fifths neighbours by the accidentals it would need
+ * (see closestSignature).
  */
 export function estimateKey(notes: (Pick<Note, 'pitch' | 'duration'> & { start?: number })[]): KeySignature {
   const hist = new Array<number>(12).fill(0);
@@ -419,5 +421,33 @@ export function estimateKey(notes: (Pick<Note, 'pitch' | 'duration'> & { start?:
     }
   }
   const relativeMajor = best.mode === 'major' ? best.tonic : (best.tonic + 3) % 12;
-  return { fifths: FIFTHS_OF_MAJOR[relativeMajor]!, mode: best.mode };
+  const fifths = FIFTHS_OF_MAJOR[relativeMajor]!;
+  return { fifths: closestSignature(hist, fifths), mode: best.mode };
+}
+
+/** Pitch classes of the major scale with this signature (−1 = F major: F G A B♭ C D E). */
+function scaleOf(fifths: number): Set<number> {
+  return new Set([-1, 0, 1, 2, 3, 4, 5].map((q) => ((((q + fifths) * 7) % 12) + 12) % 12));
+}
+
+/**
+ * Settle the signature between the correlated key and its two neighbours on the circle of
+ * fifths. Profile correlation weighs tonic and dominant most, so it cannot tell a key from the
+ * key a fifth away when the music sits on a pedal (F major over a long C bass reads as C major).
+ * Neighbouring keys share six of their seven scale tones; the evidence that separates them is
+ * the one that differs (B♭ vs B♮ for F vs C). Take the signature that leaves the least weighted
+ * mass outside its scale — i.e. needs the fewest accidentals on the page; ties keep the
+ * correlated key.
+ */
+export function closestSignature(hist: number[], fifths: number): number {
+  const outside = (f: number) => {
+    const scale = scaleOf(f);
+    return hist.reduce((sum, w, pc) => sum + (scale.has(pc) ? 0 : w), 0);
+  };
+  let best = fifths;
+  for (const f of [fifths - 1, fifths + 1]) {
+    if (f < -7 || f > 7) continue;
+    if (outside(f) < outside(best) - 1e-9) best = f;
+  }
+  return best;
 }

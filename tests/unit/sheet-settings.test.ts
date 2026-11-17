@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isFreeTiming } from '../../src/core/quantize';
+import { scoreToMusicXml } from '../../src/converters/outputs/musicxml';
+import { closestSignature, estimateKey, isFreeTiming } from '../../src/core/quantize';
 import { createScore, type Note } from '../../src/core/score';
 import { defaultSheetSettings, quantizeOptions, tonicName, withTimeSig } from '../../src/ui/sheetSettings';
+import { fMajorOverPedal, performed } from '../fixtures/ballade';
 import { minuetInG, pieceToScore } from '../fixtures/music';
 
 /** 8 bars of 6/8 at dotted quarter = 60, played with jitter (a "recording"). */
@@ -59,5 +61,34 @@ describe('sheet settings', () => {
     expect(tonicName({ fifths: -4, mode: 'minor' })).toBe('F');
     expect(tonicName({ fifths: 6, mode: 'major' }, true)).toBe('Fa♯');
     expect(tonicName({ fifths: -4, mode: 'major' }, true)).toBe('La♭');
+  });
+});
+
+describe('key over a dominant pedal', () => {
+  it('F-major tune of repeated Cs over a C pedal (6/8) → one flat, no sharps', () => {
+    const score = performed(fMajorOverPedal);
+    // Profile correlation alone prefers C major (tonic C, dominant G); the B♭s decide.
+    expect(estimateKey(score.notes)).toEqual({ fifths: -1, mode: 'major' });
+    const free = isFreeTiming(score);
+    expect(free).toBe(true);
+    const s = defaultSheetSettings(score, free);
+    expect(s.timeSig).toBe('6/8');
+    const xml = scoreToMusicXml(score, quantizeOptions(score, free, s));
+    expect(xml).toContain('<fifths>-1</fifths>');
+    expect(xml).not.toContain('<alter>1</alter>');
+    expect(xml).not.toContain('<accidental>'); // B♭ comes from the key signature
+  });
+
+  it('settles the signature by the one scale tone neighbouring keys disagree on', () => {
+    const hist = new Array<number>(12).fill(0);
+    hist[0] = 10; // C
+    hist[7] = 6; // G
+    hist[4] = 2; // E
+    hist[10] = 1; // B♭
+    expect(closestSignature(hist, 0)).toBe(-1);
+    hist[11] = 1.5; // more B♮ than B♭: stays C
+    expect(closestSignature(hist, 0)).toBe(0);
+    hist[11] = 1; // tie: keep the correlated key
+    expect(closestSignature(hist, 0)).toBe(0);
   });
 });

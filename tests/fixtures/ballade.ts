@@ -59,16 +59,17 @@ export const BALLADE_SPELLING: Record<number, string> = {
 };
 
 /**
- * The theme as played: mezza voce dynamics (top line louder than inner notes, LH chords soft),
+ * A fixture as played: mezza voce dynamics (top line louder than inner notes, LH chords soft),
  * gentle rubato (±5 % tempo over two bars), the bass a few ms ahead of the melody, small onset
- * jitter, and notes released slightly early (non-legato fingers, no pedal).
+ * jitter, and notes released slightly early (non-legato fingers, no pedal). The returned Score
+ * says 120 BPM 4/4, like a transcription that knows nothing about the meter.
  */
-export function performedBallade(): Score {
-  const notated = pieceToScore(balladeTheme);
-  const pulse = 60 / balladeTheme.bpm / 2; // eighth in seconds
+export function performed(piece: FixturePiece): Score {
+  const notated = pieceToScore(piece);
+  const pulse = 60 / piece.bpm / 2; // eighth in seconds
   // Integrate the rubato over eighths.
   const times: number[] = [0];
-  for (let k = 0; k < 200; k++) times.push(times[k]! + pulse * (1 + 0.05 * Math.sin((2 * Math.PI * k) / 12)));
+  for (let k = 0; k < 400; k++) times.push(times[k]! + pulse * (1 + 0.05 * Math.sin((2 * Math.PI * k) / 12)));
   const warp = (s: number) => {
     const x = s / pulse;
     const k = Math.floor(x);
@@ -80,10 +81,39 @@ export function performedBallade(): Score {
     const lh = n.hand === 'L';
     const start = 0.3 + warp(n.start) + 0.008 * rand() - (lh ? 0.012 : 0);
     const end = 0.3 + warp(n.start + n.duration) - 0.04;
-    const top = !lh && (n.pitch === 84 || n.pitch === 85 || n.pitch === 82 || n.pitch === 80);
+    const top = !lh && !notated.notes.some((m) => m.hand === 'R' && m.start === n.start && m.pitch > n.pitch);
     const bass = lh && n.pitch < 48;
     const velocity = top ? 0.62 : lh ? (bass ? 0.55 : 0.38) : 0.48;
     return { ...n, start, duration: Math.max(0.05, end - start), velocity };
   });
   return createScore({ ...notated, notes, tempos: [{ time: 0, bpm: 120 }], timeSignature: { numerator: 4, denominator: 4 } });
 }
+
+/** The Ballade theme as played (see `performed`). */
+export function performedBallade(): Score {
+  return performed(balladeTheme);
+}
+
+/**
+ * Same texture as the second theme of the Ballade No. 3 as it is often first heard: an F-major
+ * tune of repeated Cs (6/8) over a dominant pedal — the left hand keeps C in the bass with C–E–G
+ * off-beats for seven bars and only resolves to F in the last one. Written in code for this
+ * project. Tonic/dominant-heavy profiles read it as C major; the B♭s say F major.
+ */
+export const fMajorOverPedal: FixturePiece = {
+  title: 'F major theme over a C pedal',
+  bpm: 90,
+  beats: 6,
+  beatType: 8,
+  fifths: -1,
+  measures: [
+    [rh(['C5'], ['C5'], ['C5'], ['C5']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [rh(['C5'], ['Bb4'], ['A4'], ['G4']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [rh(['C5'], ['C5'], ['C5'], ['D5']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [rh(['C5'], ['Bb4'], ['G4'], ['E4']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [rh(['C5'], ['C5'], ['F5'], ['E5']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [rh(['D5'], ['C5'], ['Bb4'], ['A4']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [rh(['G4'], ['A4'], ['Bb4'], ['G4']), lh('C2', ['E3', 'G3'], 'C3', ['E3', 'G3'])],
+    [[ev(['F4', 'A4', 'C5'], DH)], [ev(['F2', 'C3', 'F3'], DH)]],
+  ],
+};

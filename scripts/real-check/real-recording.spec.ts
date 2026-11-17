@@ -8,7 +8,8 @@ import { join } from 'node:path';
 // Chromium may lack AAC.
 // Run: npm run real-check:sheet   (config: scripts/real-check/sheet.config.ts, port 4191)
 // REAL_RECORDING=/path/file.mov picks another file; SHOT=name the screenshot name
-// (default docs/screenshots/real-recording-sheet.png). Prints meter, key, tempo, rests per staff-bar.
+// (default docs/screenshots/real-recording-sheet.png). Prints meter, key, tempo, rests per staff-bar
+// and asserts meter 6/8, key F major (−1), no sharps, ≤ 1 rest per staff-bar (REAL_EXPECT changes the first two).
 const file = process.env.REAL_RECORDING ?? join(homedir(), 'Downloads', 'recording.mov');
 const shot = process.env.SHOT ?? 'real-recording-sheet';
 
@@ -31,6 +32,8 @@ function sheetStats(xml: string) {
     tiesStart: (xml.match(/<tie type="start"/g) ?? []).length,
     sharps: (xml.match(/<alter>1<\/alter>/g) ?? []).length,
     flats: (xml.match(/<alter>-1<\/alter>/g) ?? []).length,
+    /** Accidentals printed on the page (not covered by the key signature). */
+    accidentals: (xml.match(/<accidental>/g) ?? []).length,
   };
 }
 
@@ -51,5 +54,13 @@ test('real recording → sheet', async ({ page }) => {
   await page.getByRole('tab', { name: 'Download' }).click();
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-musicxml').click()]);
   const xml = readFileSync(await dl.path(), 'utf8');
-  console.log('stats:', JSON.stringify(sheetStats(xml)));
+  const stats = sheetStats(xml);
+  console.log('stats:', JSON.stringify(stats));
+  // the real recording is the F-major second theme of Chopin's Ballade No. 3 over a C pedal (6/8).
+  // Override with REAL_EXPECT='time,fifths' for another file, e.g. REAL_EXPECT='4/4,0'.
+  const [time, fifths] = (process.env.REAL_EXPECT ?? '6/8,-1').split(',');
+  expect(stats.time).toBe(time);
+  expect(stats.fifths).toBe(Number(fifths));
+  expect(stats.sharps).toBe(0);
+  expect(stats.restsPerStaffBar).toBeLessThanOrEqual(1.0);
 });
