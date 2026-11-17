@@ -114,19 +114,30 @@ export function PracticeView({ score }: { score: Score }) {
     let uiTick = 0;
     let size = { w: 0, h: 0 };
     const renderMs = { avg: 0, worst: 0 };
+    const draw = (t: number) =>
+      renderFrame(ctx, score, t, {
+        ...settingsRef.current.opts,
+        pressed: pressedRef.current,
+        width: size.w,
+        height: size.h,
+      });
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const w = wrap.clientWidth;
-      const h = Math.max(240, Math.round(Math.min(window.innerHeight * 0.62, w * 0.56)));
+      // Leave room for the controls below so everything fits on one screen.
+      const h = Math.max(200, Math.round(Math.min(window.innerHeight - 320, w * 0.5)));
+      if (w === size.w && h === size.h) return;
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       size = { w, h };
+      draw(lastT); // resizing clears the canvas; repaint now instead of showing a black frame
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
+    window.addEventListener('resize', resize);
 
     const frame = () => {
       const now = performance.now();
@@ -164,12 +175,7 @@ export function PracticeView({ score }: { score: Score }) {
       }
       lastT = tNow;
       const r0 = performance.now();
-      renderFrame(ctx, score, tNow, {
-        ...settingsRef.current.opts,
-        pressed: pressedRef.current,
-        width: size.w,
-        height: size.h,
-      });
+      draw(tNow);
       const rms = performance.now() - r0;
       renderMs.avg = renderMs.avg ? renderMs.avg * 0.95 + rms * 0.05 : rms;
       if (transport.playing) renderMs.worst = Math.max(renderMs.worst, rms);
@@ -186,8 +192,38 @@ export function PracticeView({ score }: { score: Score }) {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener('resize', resize);
     };
   }, [score, transport]);
+
+  // Warm up the piano while the user looks at the notes, so the first Play is instant.
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300));
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = idle(() => void loadPiano());
+    return () => cancel(id);
+  }, []);
+
+  // Space bar toggles play/pause (unless a form control has focus).
+  const playButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      // Text fields keep their space; on buttons Space would re-click them, so we take it over.
+      if (
+        el &&
+        ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) &&
+        (el as HTMLInputElement).type !== 'range' &&
+        (el as HTMLInputElement).type !== 'checkbox'
+      )
+        return;
+      e.preventDefault();
+      playButtonRef.current?.click();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const togglePlay = async () => {
     if (transport.playing) {
@@ -242,7 +278,14 @@ export function PracticeView({ score }: { score: Score }) {
         />
       </div>
       <div className="controls">
-        <button type="button" onClick={() => void togglePlay()} data-testid="play">
+        <button
+          type="button"
+          className="primary"
+          ref={playButtonRef}
+          onClick={() => void togglePlay()}
+          data-testid="play"
+          title={t('practice.play.tip')}
+        >
           {playing ? t('practice.pause') : t('practice.play')}
         </button>
         <button
@@ -254,8 +297,19 @@ export function PracticeView({ score }: { score: Score }) {
         >
           {t('practice.restart')}
         </button>
-        <label className="grow">
+        <label className="grow seek">
           <span className="sr">{t('practice.seek')}</span>
+          {loop.a !== null && (
+            <span
+              className="loop-band"
+              data-testid="loop-band"
+              title={t('practice.loop.band')}
+              style={{
+                left: `${(loop.a / duration) * 100}%`,
+                width: `${(((loop.b ?? duration) - loop.a) / duration) * 100}%`,
+              }}
+            />
+          )}
           <input
             type="range"
             min={0}
@@ -290,40 +344,54 @@ export function PracticeView({ score }: { score: Score }) {
             aria-label={t('practice.speed')}
           />
         </label>
-        <button
-          type="button"
-          onClick={() => {
-            const a = transport.time;
-            transport.setLoop(a, loop.b !== null && loop.b > a ? loop.b : null);
-            setLoop({ a, b: loop.b !== null && loop.b > a ? loop.b : null });
-          }}
-        >
-          {t('practice.loopA')}
-          {loop.a !== null ? ` (${fmt(loop.a)})` : ''}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const b = transport.time;
-            const a = loop.a ?? 0;
-            if (b > a) {
+        <span className="repeat" role="group" aria-label={t('practice.loop.group')}>
+          <button
+            type="button"
+            title={t('practice.loop.tip')}
+            data-testid="loop-start"
+            onClick={() => {
+              const a = transport.time;
+              const b = loop.b !== null && loop.b > a ? loop.b : null;
               transport.setLoop(a, b);
               setLoop({ a, b });
-            }
-          }}
-        >
-          {t('practice.loopB')}
-          {loop.b !== null ? ` (${fmt(loop.b)})` : ''}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            transport.setLoop(null, null);
-            setLoop({ a: null, b: null });
-          }}
-        >
-          {t('practice.loopClear')}
-        </button>
+            }}
+          >
+            {t('practice.loopA')}
+            {loop.a !== null ? ` ${fmt(loop.a)}` : ''}
+          </button>
+          <button
+            type="button"
+            title={t('practice.loop.tip')}
+            data-testid="loop-end"
+            onClick={() => {
+              const b = transport.time;
+              const a = loop.a ?? 0;
+              if (b > a) {
+                transport.setLoop(a, b);
+                setLoop({ a, b });
+                transport.seek(a);
+                setPosition(a);
+              }
+            }}
+          >
+            {t('practice.loopB')}
+            {loop.b !== null ? ` ${fmt(loop.b)}` : ''}
+          </button>
+          {loop.a !== null && (
+            <button
+              type="button"
+              className="icon"
+              aria-label={t('practice.loopClear')}
+              title={t('practice.loopClear')}
+              onClick={() => {
+                transport.setLoop(null, null);
+                setLoop({ a: null, b: null });
+              }}
+            >
+              ×
+            </button>
+          )}
+        </span>
         <label>
           {t('practice.hands')}{' '}
           <select value={hands} onChange={(e) => setHands(e.target.value as Hands)}>
@@ -346,7 +414,9 @@ export function PracticeView({ score }: { score: Score }) {
         </label>
       </div>
       <p className="stats" data-testid="stats">
-        {t('practice.score', stats as unknown as Record<string, number>)}
+        {stats.hits + stats.wrong > 0 || waitMode
+          ? t('practice.score', stats as unknown as Record<string, number>)
+          : t('practice.score.idle')}
       </p>
       <p className={`notice ${midi.kind}`} data-testid="midi-status">
         {midiText}

@@ -1,7 +1,8 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { Score } from '../core/score';
 import { scoreDuration } from '../core/score';
 import { converterIdFor, detectKind } from '../converters/detect';
+import { demoScore } from '../core/demo';
 import { findInputConverter } from '../converters/registry';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import { en, type Messages } from '../i18n/en';
@@ -18,7 +19,7 @@ type Tab = 'practice' | 'sheet' | 'video' | 'download';
 type State =
   | { kind: 'home'; error?: string }
   | { kind: 'ask-video'; file: File }
-  | { kind: 'converting'; file: File; progress: number; label?: string }
+  | { kind: 'converting'; file: File; progress: number; label?: string; startedAt: number }
   | {
       kind: 'result';
       score: Score;
@@ -52,13 +53,14 @@ function Shell() {
     if (!conv) return setState({ kind: 'home', error: t('home.unknown', { name: file.name }) });
     const ac = new AbortController();
     abortRef.current = ac;
-    setState({ kind: 'converting', file, progress: 0 });
+    const startedAt = performance.now();
+    setState({ kind: 'converting', file, progress: 0, startedAt });
     try {
       const opts = id === 'falling-notes-video' ? { calibrate, alwaysCalibrate: recalibrate } : {};
       const score = await conv.convert(
         file,
         opts,
-        (progress, label) => setState({ kind: 'converting', file, progress, label }),
+        (progress, label) => setState({ kind: 'converting', file, progress, label, startedAt }),
         ac.signal,
       );
       setTab('practice');
@@ -83,6 +85,29 @@ function Shell() {
     } finally {
       abortRef.current = null;
     }
+  };
+
+  // Clock for the remaining-time estimate, ticking only while converting.
+  const [now, setNow] = useState(0);
+  const converting = state.kind === 'converting';
+  useEffect(() => {
+    if (!converting) return;
+    const id = window.setInterval(() => setNow(performance.now()), 500);
+    return () => window.clearInterval(id);
+  }, [converting]);
+
+  const stageText = (label?: string) => {
+    if (!label) return '';
+    const key = `stage.${label}` as keyof Messages;
+    return key in en ? t(key) : label;
+  };
+  const eta = (s: { progress: number; startedAt: number }) => {
+    const elapsed = (now - s.startedAt) / 1000;
+    if (s.progress < 0.05 || elapsed < 1) return t('home.eta.estimating');
+    const left = Math.max(0, (elapsed * (1 - s.progress)) / s.progress);
+    const time =
+      left < 60 ? `${Math.ceil(left)} s` : `${Math.floor(left / 60)} min ${Math.round(left % 60)} s`;
+    return t('home.eta', { time });
   };
 
   const onFiles = (files: FileList | null) => {
@@ -132,6 +157,25 @@ function Shell() {
             {t('home.pick')}
             <input type="file" data-testid="file-input" onChange={(e) => onFiles(e.target.files)} hidden />
           </label>
+          <button
+            type="button"
+            className="demo"
+            data-testid="demo"
+            onClick={() => {
+              const score = demoScore();
+              setTab('practice');
+              setState({
+                kind: 'result',
+                score,
+                name: score.title,
+                id: ++idRef.current,
+                sheet: defaultSheetSettings(score),
+                file: new File([], 'demo.mid'),
+              });
+            }}
+          >
+            {t('home.demo')}
+          </button>
           <p className="formats">{t('home.formats')}</p>
           {state.error && (
             <p className="notice error" role="alert">
@@ -163,8 +207,11 @@ function Shell() {
         <main className="dropzone">
           <h2>{t('home.converting', { name: state.file.name })}</h2>
           <progress max={1} value={state.progress} data-testid="convert-progress" />
-          <p>
-            {Math.round(state.progress * 100)}% {state.label ?? ''}
+          <p data-testid="convert-status">
+            {Math.round(state.progress * 100)}% · {stageText(state.label)}
+          </p>
+          <p className="eta" data-testid="convert-eta">
+            {eta(state)}
           </p>
           <button type="button" onClick={() => abortRef.current?.abort()}>
             {t('home.cancel')}

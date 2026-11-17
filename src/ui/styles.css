@@ -216,3 +216,45 @@ progress {
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+.seek {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.loop-band {
+  position: absolute;
+  top: 50%;
+  height: 14px;
+  transform: translateY(-50%);
+  background: rgba(250, 204, 21, 0.35);
+  border: 1px solid #facc15;
+  border-radius: 4px;
+  pointer-events: none;
+}
+.repeat {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+button.icon {
+  padding: 6px 10px;
+}
+.eta {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.video-preview-canvas {
+  width: min(640px, 100%);
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+}
+.demo {
+  background: none;
+  border: 0;
+  color: var(--accent2);
+  text-decoration: underline;
+  cursor: pointer;
+}
