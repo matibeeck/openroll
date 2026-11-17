@@ -32,7 +32,10 @@ export function VideoView({ score }: { score: Score }) {
       const blob = await exportVideo(score, { ...opts, end: clip }, (f) => setProgress(f), ac.signal);
       setResult({ url: URL.createObjectURL(blob), size: blob.size });
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') setError((e as Error).message);
+      if ((e as Error).name !== 'AbortError') {
+        const code = (e as { code?: string }).code;
+        setError(code === 'audio-suspended' ? t('error.audio-suspended') : (e as Error).message);
+      }
     } finally {
       setProgress(null);
       abortRef.current = null;

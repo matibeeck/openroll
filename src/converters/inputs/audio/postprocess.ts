@@ -56,7 +56,7 @@ export const DEFAULT_POSTPROCESS: PostprocessOptions = {
   ghostMaxOnset: 0.85,
   ghostAmplitudeRatio: 0.6,
   minOnset: 0.6,
-  minVelocity: 0.25,
+  minVelocity: 0.35,
   maxVelocity: 1.0,
   splitPitch: 60,
   title: 'Transcription',

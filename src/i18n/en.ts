@@ -94,6 +94,7 @@ export const en = {
   'calibrate.ok': 'Use this keyboard',
   'calibrate.cancel': 'Cancel',
   'home.recalibrate': 'Recalibrate keyboard',
+  'error.audio-suspended': 'The browser blocked audio. Click anywhere on the page and export again.',
 } as const;
 
 export type Messages = Record<keyof typeof en, string>;

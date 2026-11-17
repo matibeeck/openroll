@@ -91,9 +91,22 @@ export async function exportVideo(
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const stopped = new Promise<void>((r) => (recorder.onstop = () => r()));
 
-  // Schedule audio on the AudioContext timeline, then record in lockstep with it.
-  const lead = 0.15;
-  const t0 = piano.now() + lead;
+  // The AudioContext must be running or nothing reaches the recorder (e.g. no user gesture yet).
+  if (raw.state !== 'running') await raw.resume().catch(() => {});
+  if (dest && raw.state !== 'running') {
+    tone.getDestination().mute = wasMuted;
+    tone.disconnect(piano.output, dest);
+    throw Object.assign(new Error('Audio is blocked by the browser; click the page and try again.'), {
+      code: 'audio-suspended',
+    });
+  }
+
+  // Start recording first (paused), so audio can never play before the recorder is listening,
+  // then schedule the notes and resume the recorder exactly when the audio starts.
+  recorder.start(1000);
+  recorder.pause();
+  const lead = 0.25;
+  const t0 = raw.currentTime + lead;
   if (dest) {
     for (const n of score.notes) {
       if (n.start + n.duration <= start || n.start >= end) continue;
@@ -102,32 +115,30 @@ export async function exportVideo(
     }
   }
 
+  // Drive frames from a worker clock locked to the audio clock (rAF stops in hidden tabs).
+  const ticker = new Worker(new URL('../../../workers/ticker.worker.ts', import.meta.url), { type: 'module' });
   await new Promise<void>((resolve, reject) => {
-    let started = false;
-    let raf = 0;
-    const tick = () => {
-      if (signal?.aborted) {
-        cancelAnimationFrame(raf);
-        if (recorder.state !== 'inactive') recorder.stop();
-        reject(new DOMException('Export cancelled', 'AbortError'));
-        return;
-      }
-      const elapsed = raw.currentTime - t0;
-      if (!started && elapsed >= 0) {
-        recorder.start(1000);
-        started = true;
-      }
-      const t = start + Math.max(0, Math.min(elapsed, length));
-      render(t);
-      onProgress(Math.max(0, Math.min(1, elapsed / length)));
-      if (elapsed >= length) {
-        recorder.stop();
-        resolve();
-        return;
-      }
-      raf = requestAnimationFrame(tick);
+    let recording = false;
+    const finish = (err?: Error) => {
+      ticker.onmessage = null;
+      ticker.postMessage({ cmd: 'stop' });
+      ticker.terminate();
+      if (recorder.state !== 'inactive') recorder.stop();
+      if (err) reject(err);
+      else resolve();
     };
-    raf = requestAnimationFrame(tick);
+    ticker.onmessage = () => {
+      if (signal?.aborted) return finish(new DOMException('Export cancelled', 'AbortError'));
+      const elapsed = raw.currentTime - t0;
+      if (!recording && elapsed >= 0) {
+        recorder.resume();
+        recording = true;
+      }
+      render(start + Math.max(0, Math.min(elapsed, length)));
+      onProgress(Math.max(0, Math.min(1, elapsed / length)));
+      if (elapsed >= length) finish();
+    };
+    ticker.postMessage({ cmd: 'start', intervalMs: Math.max(4, Math.floor(1000 / o.fps / 2)) });
   }).finally(() => {
     piano.releaseAll();
     tone.getDestination().mute = wasMuted;

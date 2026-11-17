@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { generatedMidi, openFile, writeTemp } from './helpers';
+import { generatedMidi, openFile, synthWav, writeTemp } from './helpers';
 
 test('video export: 10-second clip plays and has the right duration', async ({ page }) => {
   await page.goto('/?lang=en&clip=10');
@@ -76,4 +76,49 @@ test('video export options: 1080p, 60 fps, light theme, labels', async ({ page }
   expect(Math.abs(info.duration - 2)).toBeLessThanOrEqual(0.2);
   // Light theme background is #f1f5f9.
   expect(info.bg[0]).toBeGreaterThan(200);
+});
+
+test('video exported from a transcribed recording has audible sound', async ({ page }) => {
+  const melody = Array.from({ length: 10 }, (_, i) => [60 + (i % 5) * 2, 0.25 + i * 0.4, 0.35] as [number, number, number]);
+  await page.goto('/?lang=en&clip=4');
+  await openFile(page, writeTemp('rec.wav', synthWav(melody)));
+  await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 90_000 });
+  await page.getByRole('tab', { name: 'Video' }).click();
+  await page.getByTestId('export-video').click();
+  const preview = page.getByTestId('video-preview');
+  await expect(preview).toBeVisible({ timeout: 60_000 });
+  const rms = await preview.evaluate(async (v: HTMLVideoElement) => {
+    const blob = await (await fetch(v.src)).blob();
+    const audio = await new AudioContext().decodeAudioData(await blob.arrayBuffer());
+    const ch = audio.getChannelData(0);
+    let sum = 0;
+    for (let i = 0; i < ch.length; i++) sum += ch[i]! * ch[i]!;
+    return Math.sqrt(sum / ch.length);
+  });
+  console.log('transcribed export RMS', rms);
+  expect(rms).toBeGreaterThan(0.005);
+});
+
+test('export keeps sound and length when the tab is hidden (no animation frames)', async ({ page }) => {
+  // Hidden tabs get no requestAnimationFrame callbacks; the exporter must not depend on them.
+  await page.addInitScript(() => {
+    window.requestAnimationFrame = () => 0;
+  });
+  await page.goto('/?lang=en&clip=4');
+  await openFile(page, writeTemp('hidden.mid', generatedMidi(6, 'Hidden tab')));
+  await page.getByRole('tab', { name: 'Video' }).click();
+  await page.getByTestId('export-video').click();
+  const preview = page.getByTestId('video-preview');
+  await expect(preview).toBeVisible({ timeout: 60_000 });
+  const info = await preview.evaluate(async (v: HTMLVideoElement) => {
+    const blob = await (await fetch(v.src)).blob();
+    const audio = await new AudioContext().decodeAudioData(await blob.arrayBuffer());
+    const ch = audio.getChannelData(0);
+    let sum = 0;
+    for (let i = 0; i < ch.length; i++) sum += ch[i]! * ch[i]!;
+    return { rms: Math.sqrt(sum / ch.length), duration: audio.duration };
+  });
+  console.log('hidden-tab export', info);
+  expect(info.rms).toBeGreaterThan(0.005);
+  expect(Math.abs(info.duration - 4)).toBeLessThanOrEqual(0.3);
 });

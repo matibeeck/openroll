@@ -96,4 +96,5 @@ export const es: Messages = {
   'calibrate.ok': 'Usar este teclado',
   'calibrate.cancel': 'Cancelar',
   'home.recalibrate': 'Recalibrar teclado',
+  'error.audio-suspended': 'El navegador bloqueó el audio. Haz clic en cualquier parte de la página y vuelve a exportar.',
 };

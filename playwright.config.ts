@@ -5,6 +5,8 @@ const port = Number(process.env.E2E_PORT ?? 4173);
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Separate artifacts per port so concurrent runs don't delete each other's traces.
+  outputDir: `test-results/port-${port}`,
   timeout: 120_000,
   fullyParallel: false,
   workers: 1,
