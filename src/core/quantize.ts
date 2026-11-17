@@ -7,6 +7,7 @@
  * For recordings (`legato`), note ends follow the next onset of the same hand, so the sheet is
  * not littered with rests and ties from articulation and decay.
  */
+import { estimateKey } from './key';
 import { pulseIndex } from './meter';
 import type { Hand, KeySignature, Note, PedalSpan, Score, TempoEvent, TimeSignature } from './score';
 import { normalizeTempos, secondsToBeats } from './tempo';
@@ -366,88 +367,4 @@ export function tapTempo(taps: number[]): number | null {
   const good = last.filter((d) => Math.abs(d - median) <= 0.3 * median);
   const mean = good.reduce((s, d) => s + d, 0) / good.length;
   return Math.round((60000 / mean) * 10) / 10;
-}
-
-// Temperley's key profiles (Kostka–Payne corpus; C major / C minor). Compared with
-// Krumhansl–Kessler they weigh the tonic triad less against the 6th, so a melody that keeps
-// repeating the 3rd (C in A♭ major) is not read as the relative minor's tonic.
-const MAJOR_PROFILE = [0.748, 0.06, 0.488, 0.082, 0.67, 0.46, 0.096, 0.715, 0.104, 0.366, 0.057, 0.4];
-const MINOR_PROFILE = [0.712, 0.084, 0.474, 0.618, 0.049, 0.46, 0.105, 0.747, 0.404, 0.067, 0.133, 0.33];
-/** Major-key tonic pitch class → circle-of-fifths position (Db, Eb, F#… spelled conventionally). */
-const FIFTHS_OF_MAJOR = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5];
-
-function correlation(a: number[], b: number[]): number {
-  const ma = a.reduce((s, x) => s + x, 0) / a.length;
-  const mb = b.reduce((s, x) => s + x, 0) / b.length;
-  let num = 0;
-  let da = 0;
-  let db = 0;
-  for (let i = 0; i < a.length; i++) {
-    num += (a[i]! - ma) * (b[i]! - mb);
-    da += (a[i]! - ma) ** 2;
-    db += (b[i]! - mb) ** 2;
-  }
-  return da && db ? num / Math.sqrt(da * db) : 0;
-}
-
-/**
- * Krumhansl–Schmuckler key estimate (Temperley's profiles) from a pitch-class histogram weighted
- * by duration (capped at 1.5 s, so pedalled or decaying notes do not dominate) with bass notes
- * (lowest of their onset, below C4) counted twice: the bass carries the harmony. The signature
- * is then settled against its circle-of-fifths neighbours by the accidentals it would need
- * (see closestSignature).
- */
-export function estimateKey(notes: (Pick<Note, 'pitch' | 'duration'> & { start?: number })[]): KeySignature {
-  const hist = new Array<number>(12).fill(0);
-  const sorted = [...notes].sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
-  let j = 0;
-  for (let i = 0; i < sorted.length; i++) {
-    const n = sorted[i]!;
-    let bass = false;
-    if (n.start !== undefined && n.pitch < 60) {
-      while (sorted[j]!.start! < n.start - 0.05) j++;
-      bass = true;
-      for (let k = j; k < sorted.length && sorted[k]!.start! <= n.start + 0.05; k++) if (sorted[k]!.pitch < n.pitch) bass = false;
-    }
-    hist[((n.pitch % 12) + 12) % 12]! += Math.min(n.duration, 1.5) * (bass ? 2 : 1);
-  }
-  if (hist.every((x) => x === 0)) return { fifths: 0, mode: 'major' };
-  let best = { score: -Infinity, tonic: 0, mode: 'major' as 'major' | 'minor' };
-  for (let tonic = 0; tonic < 12; tonic++) {
-    const rotated = hist.map((_, i) => hist[(i + tonic) % 12]!);
-    for (const mode of ['major', 'minor'] as const) {
-      const r = correlation(rotated, mode === 'major' ? MAJOR_PROFILE : MINOR_PROFILE);
-      if (r > best.score + 1e-12) best = { score: r, tonic, mode };
-    }
-  }
-  const relativeMajor = best.mode === 'major' ? best.tonic : (best.tonic + 3) % 12;
-  const fifths = FIFTHS_OF_MAJOR[relativeMajor]!;
-  return { fifths: closestSignature(hist, fifths), mode: best.mode };
-}
-
-/** Pitch classes of the major scale with this signature (−1 = F major: F G A B♭ C D E). */
-function scaleOf(fifths: number): Set<number> {
-  return new Set([-1, 0, 1, 2, 3, 4, 5].map((q) => ((((q + fifths) * 7) % 12) + 12) % 12));
-}
-
-/**
- * Settle the signature between the correlated key and its two neighbours on the circle of
- * fifths. Profile correlation weighs tonic and dominant most, so it cannot tell a key from the
- * key a fifth away when the music sits on a pedal (F major over a long C bass reads as C major).
- * Neighbouring keys share six of their seven scale tones; the evidence that separates them is
- * the one that differs (B♭ vs B♮ for F vs C). Take the signature that leaves the least weighted
- * mass outside its scale — i.e. needs the fewest accidentals on the page; ties keep the
- * correlated key.
- */
-export function closestSignature(hist: number[], fifths: number): number {
-  const outside = (f: number) => {
-    const scale = scaleOf(f);
-    return hist.reduce((sum, w, pc) => sum + (scale.has(pc) ? 0 : w), 0);
-  };
-  let best = fifths;
-  for (const f of [fifths - 1, fifths + 1]) {
-    if (f < -7 || f > 7) continue;
-    if (outside(f) < outside(best) - 1e-9) best = f;
-  }
-  return best;
 }

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { scoreToMusicXml } from '../../src/converters/outputs/musicxml';
-import { closestSignature, estimateKey, isFreeTiming } from '../../src/core/quantize';
+import { analyzeKey } from '../../src/core/key';
+import { isFreeTiming } from '../../src/core/quantize';
 import { createScore, type Note } from '../../src/core/score';
-import { defaultSheetSettings, quantizeOptions, tonicName, withTimeSig } from '../../src/ui/sheetSettings';
+import { autoKey, defaultSheetSettings, KEY_CHOICES, keyValue, parseKey, quantizeOptions, tonicName, withTimeSig } from '../../src/ui/sheetSettings';
 import { fMajorOverPedal, performed } from '../fixtures/ballade';
 import { minuetInG, pieceToScore } from '../fixtures/music';
 
@@ -66,9 +67,13 @@ describe('sheet settings', () => {
 
 describe('key over a dominant pedal', () => {
   it('F-major tune of repeated Cs over a C pedal (6/8) → one flat, no sharps', () => {
-    const score = performed(fMajorOverPedal);
-    // Profile correlation alone prefers C major (tonic C, dominant G); the B♭s decide.
-    expect(estimateKey(score.notes)).toEqual({ fifths: -1, mode: 'major' });
+    const score = { ...performed(fMajorOverPedal), key: undefined }; // a transcription has no key
+    // Profile correlation alone prefers C major (tonic C, dominant G); with the pedal chord
+    // left out, the B♭s, the F and A and the bass resolving to F decide.
+    const a = analyzeKey(score.notes);
+    expect(a.pedal).toBe(0);
+    expect(a.key).toEqual({ fifths: -1, mode: 'major' });
+    expect(a.margin).toBeGreaterThan(0.2);
     const free = isFreeTiming(score);
     expect(free).toBe(true);
     const s = defaultSheetSettings(score, free);
@@ -79,16 +84,39 @@ describe('key over a dominant pedal', () => {
     expect(xml).not.toContain('<accidental>'); // B♭ comes from the key signature
   });
 
-  it('settles the signature by the one scale tone neighbouring keys disagree on', () => {
-    const hist = new Array<number>(12).fill(0);
-    hist[0] = 10; // C
-    hist[7] = 6; // G
-    hist[4] = 2; // E
-    hist[10] = 1; // B♭
-    expect(closestSignature(hist, 0)).toBe(-1);
-    hist[11] = 1.5; // more B♮ than B♭: stays C
-    expect(closestSignature(hist, 0)).toBe(0);
-    hist[11] = 1; // tie: keep the correlated key
-    expect(closestSignature(hist, 0)).toBe(0);
+  it('a chosen key overrides the estimate: signature and spelling follow', () => {
+    const score = { ...performed(fMajorOverPedal), key: undefined };
+    const free = isFreeTiming(score);
+    const s = { ...defaultSheetSettings(score, free), key: keyValue({ fifths: 0, mode: 'major' }) };
+    const xml = scoreToMusicXml(score, quantizeOptions(score, free, s));
+    expect(xml).toContain('<fifths>0</fifths>');
+    // B♭ is now outside the key: spelled B♭ with a printed flat, never A♯.
+    expect(xml).toContain('<alter>-1</alter>');
+    expect(xml).toContain('<accidental>flat</accidental>');
+    expect(xml).not.toContain('<alter>1</alter>');
+  });
+});
+
+describe('key setting', () => {
+  it('auto is the file key, else the estimate', () => {
+    expect(defaultSheetSettings(pieceToScore(minuetInG)).key).toBe('auto');
+    expect(autoKey(pieceToScore(minuetInG))).toEqual({ key: { fifths: 1, mode: 'major' }, fromFile: true });
+    const free = { ...performed(fMajorOverPedal), key: undefined }; // a transcription has no key
+    expect(autoKey(free)).toEqual({ key: { fifths: -1, mode: 'major' }, fromFile: false });
+  });
+
+  it('offers the 24 keys and round-trips their values', () => {
+    expect(KEY_CHOICES).toHaveLength(24);
+    expect(new Set(KEY_CHOICES.map(keyValue)).size).toBe(24);
+    for (const k of KEY_CHOICES) expect(parseKey(keyValue(k))).toEqual(k);
+    expect(parseKey('auto')).toBeUndefined();
+    expect(parseKey('9:major')).toBeUndefined();
+  });
+
+  it('applies a chosen key to notated scores too (and nothing else)', () => {
+    const score = pieceToScore(minuetInG);
+    expect(quantizeOptions(score, false, { ...defaultSheetSettings(score), key: '-3:major' })).toEqual({ key: { fifths: -3, mode: 'major' } });
+    const xml = scoreToMusicXml(score, quantizeOptions(score, false, { ...defaultSheetSettings(score), key: '-3:major' }));
+    expect(xml).toContain('<fifths>-3</fifths>');
   });
 });

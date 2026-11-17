@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { autoDivisions, estimateKey, gridDivisions, isFreeTiming, legatoDurations, pedalEnd, quantize, tapTempo } from '../../src/core/quantize';
+import { estimateKey } from '../../src/core/key';
+import { autoDivisions, gridDivisions, isFreeTiming, legatoDurations, pedalEnd, quantize, tapTempo } from '../../src/core/quantize';
 import { createScore, type Note } from '../../src/core/score';
 import { assignVoices, buildChords, decompose, noteValues, voicePieces } from '../../src/converters/outputs/musicxml/layout';
 import { cMajorScale, minuetInG, pieceToScore, p } from '../fixtures/music';

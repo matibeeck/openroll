@@ -1,9 +1,10 @@
 import type { KeySignature, Score, TimeSignature } from '../core/score';
 import { isFreeTiming, type GridChoice, type QuantizeOptions } from '../core/quantize';
 import { beatQuarters, estimateMeter, type MeterEstimate } from '../core/meter';
+import { ALL_KEYS, estimateKey } from '../core/key';
 
 /**
- * Tempo/meter chosen in the Sheet tab; shared with the Download tab so files match what is shown.
+ * Tempo/meter/key chosen in the Sheet tab; shared with the Download tab so files match what is shown.
  * For free-timing scores the tempo is in beats of the meter (dotted quarters in 6/8, 9/8, 12/8)
  * and both fields start from the estimate.
  */
@@ -14,6 +15,8 @@ export interface SheetSettings {
   simplify?: boolean;
   /** Shortest note value: 'auto', '8', '16' or '32'. */
   grid?: string;
+  /** Key: 'auto' (the file's key, else the estimate) or a keyValue() such as '-1:major'. */
+  key?: string;
 }
 
 export const MIN_BPM = 20;
@@ -33,13 +36,14 @@ export function sheetEstimate(score: Score, timeSig?: TimeSignature): MeterEstim
 export function defaultSheetSettings(score: Score, free = isFreeTiming(score)): SheetSettings {
   const est = free ? sheetEstimate(score) : null;
   if (est) {
-    return { bpmText: String(Math.round(est.beatBpm)), timeSig: tsText(est.timeSignature), simplify: false, grid: 'auto' };
+    return { bpmText: String(Math.round(est.beatBpm)), timeSig: tsText(est.timeSignature), simplify: false, grid: 'auto', key: 'auto' };
   }
   return {
     bpmText: String(Math.round(score.tempos[0]?.bpm ?? 120)),
     timeSig: tsText(score.timeSignature),
     simplify: false,
     grid: 'auto',
+    key: 'auto',
   };
 }
 
@@ -77,15 +81,38 @@ export function withTimeSig(score: Score, s: SheetSettings, timeSig: string): Sh
   return { ...s, timeSig, bpmText };
 }
 
+/** Select value of a key, e.g. '-1:major' (F major), '0:minor' (A minor). */
+export function keyValue(key: KeySignature): string {
+  return `${key.fifths}:${key.mode}`;
+}
+
+/** The key a keyValue() names, or undefined for 'auto' and anything else. */
+export function parseKey(value: string | undefined): KeySignature | undefined {
+  const m = /^(-?\d+):(major|minor)$/.exec(value ?? '');
+  if (!m) return undefined;
+  const fifths = Number(m[1]);
+  return fifths >= -7 && fifths <= 7 ? { fifths, mode: m[2] as KeySignature['mode'] } : undefined;
+}
+
+/** Keys offered in the Sheet tab: the 24 major and minor keys, by tonic. */
+export const KEY_CHOICES: KeySignature[] = ALL_KEYS;
+
+/** The key 'auto' stands for: the score's own key (from the file), else the estimate. */
+export function autoKey(score: Score): { key: KeySignature; fromFile: boolean } {
+  return score.key ? { key: score.key, fromFile: true } : { key: estimateKey(score.notes), fromFile: false };
+}
+
 /**
  * Quantize options for a score: user tempo/meter only apply to free-timing scores, which are
  * quantized on the tracked pulse (rubato-aware) with legato note ends. A tempo different from
- * the estimate re-tracks the pulse at that tempo.
+ * the estimate re-tracks the pulse at that tempo. A chosen key applies to every score.
  */
 export function quantizeOptions(score: Score, free: boolean, s: SheetSettings): QuantizeOptions {
-  if (!free) return {};
+  const chosen = parseKey(s.key);
+  const keyOpt = chosen ? { key: chosen } : {};
+  if (!free) return keyOpt;
   const timeSignature = parseTimeSig(s.timeSig);
-  const common = { timeSignature, legato: true, simplify: s.simplify ?? false, grid: parseGrid(s.grid) };
+  const common = { ...keyOpt, timeSignature, legato: true, simplify: s.simplify ?? false, grid: parseGrid(s.grid) };
   const user = parseBpm(s.bpmText);
   const est = sheetEstimate(score, timeSignature);
   if (!est) return { ...common, bpm: user !== undefined ? user * beatQuarters(timeSignature) : undefined };

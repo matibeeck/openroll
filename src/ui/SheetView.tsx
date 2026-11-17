@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isFreeTiming, quantize, tapTempo } from '../core/quantize';
-import type { Score } from '../core/score';
+import type { KeySignature, Score } from '../core/score';
 import {
+  autoKey,
   defaultSheetSettings,
   GRID_CHOICES,
+  KEY_CHOICES,
+  keyValue,
   MAX_BPM,
   MIN_BPM,
   parseTimeSig,
@@ -50,6 +53,7 @@ export default function SheetView({
   const { bpmText, timeSig } = current;
   const simplify = current.simplify ?? false;
   const grid = current.grid ?? 'auto';
+  const keyChoice = current.key ?? 'auto';
   const replace = (next: SheetSettings) => {
     setLocalSettings(next);
     onSettings?.(next);
@@ -58,6 +62,9 @@ export default function SheetView({
   const setBpmText = (bpmText: string) => update({ bpmText });
   const setTimeSig = (ts: string) => replace(withTimeSig(score, current, ts));
   const estimate = useMemo(() => (free ? sheetEstimate(score) : null), [score, free]);
+  const detected = useMemo(() => autoKey(score), [score]);
+  const keyName = (k: KeySignature) =>
+    t(k.mode === 'minor' ? 'sheet.key.minor' : 'sheet.key.major', { tonic: tonicName(k, lang === 'es') });
   // The tempo field counts the meter's beat: ♩. in 6/8, 9/8, 12/8; ♪ in 3/8; ♩ otherwise.
   const meter = parseTimeSig(timeSig);
   const beatUnit = isCompound(meter) ? '♩.' : meter.denominator === 8 ? '♪' : '♩';
@@ -81,8 +88,8 @@ export default function SheetView({
   }, []);
 
   const quantized = useMemo(
-    () => quantize(score, quantizeOptions(score, free, { bpmText, timeSig, simplify, grid })),
-    [score, free, bpmText, timeSig, simplify, grid],
+    () => quantize(score, quantizeOptions(score, free, { bpmText, timeSig, simplify, grid, key: keyChoice })),
+    [score, free, bpmText, timeSig, simplify, grid, keyChoice],
   );
   const xml = useMemo(() => quantizedToMusicXml(quantized), [quantized]);
   const request = useMemo<Request | null>(
@@ -126,9 +133,7 @@ export default function SheetView({
                   meter: tsText(estimate.timeSignature),
                   unit: isCompound(estimate.timeSignature) ? '♩.' : '♩',
                   bpm: Math.round(estimate.beatBpm),
-                  key: t(quantized.key.mode === 'minor' ? 'sheet.key.minor' : 'sheet.key.major', {
-                    tonic: tonicName(quantized.key, lang === 'es'),
-                  }),
+                  key: keyName(detected.key),
                 })
               : t('sheet.freeHint')}
           </p>
@@ -184,6 +189,21 @@ export default function SheetView({
           </div>
         </>
       )}
+      <div className="controls">
+        <label>
+          {t('sheet.keySelect')}{' '}
+          <select value={keyChoice} onChange={(e) => update({ key: e.target.value })} data-testid="sheet-key">
+            <option value="auto">
+              {t(detected.fromFile ? 'sheet.key.autoFile' : 'sheet.key.auto', { key: keyName(detected.key) })}
+            </option>
+            {KEY_CHOICES.map((k) => (
+              <option key={keyValue(k)} value={keyValue(k)}>
+                {keyName(k)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="controls">
         <button type="button" onClick={() => setPage(Math.max(0, pageIndex - 1))} disabled={pageIndex <= 0}>
           {t('sheet.prev')}

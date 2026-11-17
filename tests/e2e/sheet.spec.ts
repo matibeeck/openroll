@@ -19,11 +19,23 @@ test('MusicXML → sheet music, then MIDI and MusicXML downloads', async ({ page
   expect(noteCount).toBeGreaterThan(20);
   await settledScreenshot(page, 'docs/screenshots/sheet.png', { fullPage: true });
 
+  // Key picker: Auto shows the file's key; another key changes the signature on the page.
+  const keySelect = page.getByTestId('sheet-key');
+  await expect(keySelect).toHaveValue('auto');
+  await expect(keySelect.locator('option:checked')).toHaveText('Auto (from the file: G major)');
+  const firstKeySig = sheet.locator('g.keySig').first();
+  await expect(firstKeySig.locator('g.keyAccid')).toHaveCount(1); // one sharp
+  await keySelect.selectOption('-3:major');
+  await expect(keySelect.locator('option:checked')).toHaveText('E♭ major');
+  await expect(firstKeySig.locator('g.keyAccid')).toHaveCount(3, { timeout: 30_000 }); // three flats
+
   await page.getByRole('tab', { name: 'Download' }).click();
   const [xmlDownload] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-musicxml').click()]);
   expect(xmlDownload.suggestedFilename()).toBe('Minuet-in-G-BWV-Anh-114.musicxml');
   const xml = readFileSync((await xmlDownload.path())!, 'utf8');
   expect(xml).toContain('<score-partwise version="4.0">');
+  // The download follows the key chosen in the Sheet tab.
+  expect(xml).toContain('<fifths>-3</fifths>');
   expect((xml.match(/<note>/g) ?? []).length).toBeGreaterThanOrEqual(97);
 
   const [midiDownload] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-midi').click()]);
