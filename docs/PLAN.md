@@ -14,11 +14,11 @@ Per milestone: implement → tests → `npm run check` green → `qa-reviewer` p
 Accept: `npm run check` and `npm run build` pass on the empty app.
 
 ## M1 — Score model + MIDI/MusicXML in
-- [ ] `Score`: notes {pitch 21–108, start/duration in seconds, velocity 0–1, hand 'L'|'R'|null, track}, tempo map, time signature, key (optional), title.
-- [ ] Hand assignment: from track/staff names when present, else split at a configurable pitch (default C4) with simple voice continuity.
-- [ ] MIDI import/export with @tonejs/midi (format 0 and 1, tempo changes).
-- [ ] MusicXML/MXL import via Verovio (MusicXML → MIDI → Score).
-- [ ] Fixtures generated in code: scales, chords, and a two-hand piece written note by note from a public-domain work (e.g. Minuet in G, BWV Anh. 114).
+- [x] `Score`: notes {pitch 21–108, start/duration in seconds, velocity 0–1, hand 'L'|'R'|null, track}, tempo map, time signature, key (optional), title.
+- [x] Hand assignment: from track/staff names when present, else split at a configurable pitch (default C4) with simple voice continuity.
+- [x] MIDI import/export with @tonejs/midi (format 0 and 1, tempo changes).
+- [x] MusicXML/MXL import via Verovio (MusicXML → MIDI → Score).
+- [x] Fixtures generated in code: scales, chords, and a two-hand piece written note by note from a public-domain work (e.g. Minuet in G, BWV Anh. 114).
 
 Accept: MIDI → Score → MIDI identical within 1 ms; MusicXML → Score matches the fixture's pitch/onset sequence.
 
