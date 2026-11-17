@@ -19,7 +19,8 @@
     "check": "npm run typecheck && npm run lint && npm run test && npm run licenses",
     "postinstall": "node scripts/copy-models.mjs && node scripts/fetch-transkun.mjs",
     "tune:audio": "node scripts/tune-audio-postprocess.mjs",
-    "real-check:sheet": "playwright test -c scripts/real-check/sheet.config.ts"
+    "real-check:sheet": "playwright test -c scripts/real-check/sheet.config.ts",
+    "real-check:compare": "playwright test -c scripts/real-check/compare/playwright.config.ts"
   },
   "dependencies": {
     "@spotify/basic-pitch": "^1.0.1",

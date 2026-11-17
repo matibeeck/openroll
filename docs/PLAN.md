@@ -90,4 +90,4 @@ Accept: Playwright e2e for each flow (MIDI → practice, MusicXML → sheet, aud
 ## Round 3 — high-precision piano mode
 - [x] Transkun (MIT) on onnxruntime-web in a worker (WebGPU, WASM fallback), model fetched at setup into `public/models/transkun/` (SHA-256), never precached; mode question fast vs high precision for audio and performance videos.
 - [x] TS front end + semi-CRF Viterbi + segment stitching checked against the reference tensors (default suite) and the upstream PyTorch pipeline (opt-in `TRANSKUN=1`); e2e picks high precision and gets notes.
-- [ ] Compare both modes on the real recording and the evaluation fixtures; choose the default from the numbers.
+- [x] Compare both modes on the real recording and the evaluation fixtures (`npm run real-check:compare`); default stays fast (Basic Pitch), numbers in docs/DECISIONS.md.

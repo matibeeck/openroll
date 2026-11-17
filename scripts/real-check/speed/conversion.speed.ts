@@ -2,8 +2,9 @@
  * Wall time of audio / performance-video → notes in the BUILT app, real Chrome, this machine.
  *
  * Scenarios (each in a freshly launched browser, so "cold" means first conversion after page load):
- *   - the real recording (default ~/Downloads/recording.mov, or REAL_RECORDING=path), as "Real performance"
+ *   - the real recording REAL_RECORDING=path (required for this scenario; skipped when unset), as "Real performance"
  *   - a 60 s synthetic two-hand piano WAV (44.1 kHz stereo, generated here; never committed)
+ * RC_MODE=fast|precise picks the transcription mode (default fast).
  * Each: cold, then two warm runs in the same page. Prints wall time, ratio to the media duration,
  * the per-stage breakdown (User Timing measures `openroll:audio:*`), main-thread long tasks and
  * the progress curve (fraction vs time, stage labels). Nothing is written into the repo.
@@ -11,7 +12,7 @@
 import { chromium, expect, test, type Page } from '@playwright/test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createScore, type Note } from '../../../src/core/score';
 import { devTwoHand } from '../../../tests/fixtures/audio-devset';
@@ -21,9 +22,10 @@ import { synthesizeScore } from '../../../tests/roundtrip/synth';
 const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi');
 const OUT_DIR = join(tmpdir(), 'openroll-real-check');
 
-const RECORDING = process.env.REAL_RECORDING ?? join(homedir(), 'Downloads', 'recording.mov');
+const RECORDING = process.env.REAL_RECORDING ?? '';
+const MODE = process.env.RC_MODE === 'precise' ? 'precise' : 'fast';
 const RUNS = Number(process.env.RC_RUNS ?? 3);
-/** Duration of REAL_RECORDING in seconds (for the ratio); default is recording.mov's. */
+/** Duration of REAL_RECORDING in seconds (for the ratio); the default is the reference recording's. */
 const REAL_SECONDS = Number(process.env.REAL_SECONDS ?? 24.15);
 /** Length of the synthetic WAV (default 60 s; any other value tests a never-seen audio length). */
 const WAV_SECONDS = Number(process.env.RC_WAV_SECONDS ?? 60);
@@ -122,6 +124,7 @@ async function convertOnce(page: Page, path: string, video: boolean, check?: str
   });
   await page.getByTestId('file-input').setInputFiles(path);
   if (video) await page.getByRole('button', { name: 'Real performance' }).click();
+  await page.getByTestId(`mode-${MODE}`).click();
   await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 300_000 });
   const r = await page.evaluate(() => {
     const w = window as unknown as {
@@ -214,7 +217,7 @@ test.describe.configure({ mode: 'serial' });
 
 const SCENARIOS: { name: string; path: () => string; seconds: number; video: boolean }[] = [
   {
-    name: `${RECORDING.split('/').pop()} (${REAL_SECONDS} s)`,
+    name: `${RECORDING.split('/').pop() || 'REAL_RECORDING'} (${REAL_SECONDS} s)`,
     path: () => RECORDING,
     seconds: REAL_SECONDS,
     video: true,
@@ -225,6 +228,7 @@ const SCENARIOS: { name: string; path: () => string; seconds: number; video: boo
 for (const s of SCENARIOS) {
   test(`speed: ${s.name}`, async ({ baseURL }) => {
     const path = s.path();
+    test.skip(!path, 'REAL_RECORDING is not set: pass the path of a recording to time it');
     test.skip(!existsSync(path), `missing ${path}`);
     const browser = await chromium.launch({ channel: 'chrome' });
     try {
