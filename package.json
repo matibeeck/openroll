@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "licenses": "node scripts/licenses.mjs",
     "check": "npm run typecheck && npm run lint && npm run test && npm run licenses",
-    "postinstall": "node scripts/copy-models.mjs"
+    "postinstall": "node scripts/copy-models.mjs",
+    "tune:audio": "node scripts/tune-audio-postprocess.mjs"
   },
   "dependencies": {
     "@spotify/basic-pitch": "^1.0.1",

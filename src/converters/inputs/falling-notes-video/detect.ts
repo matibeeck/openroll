@@ -162,9 +162,15 @@ function findKeyboardBand(f: RgbaFrame, x0 = 0, x1 = f.width, minRuns = 5): Band
     y = end;
     const blackH = end - top;
     if (blackH < 3) continue;
-    let bottom = end;
-    while (bottom < f.height && stats[bottom]!.brightFrac >= 0.6 && stats[bottom]!.runs.length <= 1) bottom++;
-    const whiteH = bottom - end;
+    // White band: bright rows without the black-key pattern. A few dark runs are allowed (keys
+    // lit in a dark shade in the idle frame), as long as they are fewer than a black-key row has.
+    const isWhiteRow = (r: number) => stats[r]!.brightFrac >= 0.6 && stats[r]!.runs.length < minRuns;
+    // Blur/compression can leave a few in-between rows at the black keys' lower edge: skip ≤ 3.
+    let whiteTop = end;
+    while (whiteTop < Math.min(f.height, end + 3) && !isWhiteRow(whiteTop)) whiteTop++;
+    let bottom = whiteTop;
+    while (bottom < f.height && isWhiteRow(bottom)) bottom++;
+    const whiteH = bottom - whiteTop;
     if (whiteH < Math.max(2, blackH * 0.15)) continue;
     const score = blackH + whiteH + top * 1e-3; // prefer taller, then lower in the frame
     if (!best || score > best.score) best = { top, blackBottom: end, bottom, score };

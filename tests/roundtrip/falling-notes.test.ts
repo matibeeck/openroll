@@ -10,7 +10,14 @@ import { describe, expect, test } from 'vitest';
 import type { Score } from '../../src/core/score';
 import { CONFIDENCE_OK } from '../../src/converters/inputs/falling-notes-video/detect';
 import { fastRepeatsPiece, monophonicMelody, twoHandPiece } from '../fixtures/transcription-fixtures';
-import { detectFromRenders, handAccuracy, type RenderSpec } from './falling-notes-helpers';
+import {
+  detectFromRenders,
+  handAccuracy,
+  lossy,
+  shadedKeysWithGlow,
+  type FrameTransform,
+  type RenderSpec,
+} from './falling-notes-helpers';
 import { formatMetrics, noteF1, report } from './metrics';
 
 interface Variant {
@@ -19,6 +26,8 @@ interface Variant {
   noise?: number;
   /** Whether the two hands have distinct colors (hands must then come out right). */
   colorHands: boolean;
+  /** Post-render processing closer to third-party videos (robustness variants). */
+  post?: (render: RenderSpec) => FrameTransform[];
 }
 
 const VARIANTS: Variant[] = [
@@ -42,6 +51,32 @@ const VARIANTS: Variant[] = [
     colorHands: false,
   },
   { name: 'dark 1280x720 noise ±20', render: { width: 1280, height: 720, theme: 'dark' }, noise: 20, colorHands: true },
+  // Robustness variants (QA): lossy re-encoding and another app's key style. Still our renderer
+  // underneath; real third-party videos remain untested.
+  {
+    name: 'dark 1280x720 lossy (blur, 4:2:0, quantized)',
+    render: { width: 1280, height: 720, theme: 'dark' },
+    post: () => [lossy()],
+    colorHands: true,
+  },
+  {
+    name: 'light 854x480 lossy (blur, 4:2:0, quantized)',
+    render: { width: 854, height: 480, theme: 'light', handColors: { R: '#f97316', L: '#14b8a6', none: '#eab308' } },
+    post: () => [lossy()],
+    colorHands: true,
+  },
+  {
+    name: 'dark 1280x720 shaded keys + glow',
+    render: { width: 1280, height: 720, theme: 'dark' },
+    post: (r) => [shadedKeysWithGlow(r)],
+    colorHands: true,
+  },
+  {
+    name: 'light 960x540 shaded keys + glow + lossy',
+    render: { width: 960, height: 540, theme: 'light', handColors: { R: '#ef4444', L: '#a855f7', none: '#eab308' } },
+    post: (r) => [shadedKeysWithGlow(r), lossy(8, 6)],
+    colorHands: true,
+  },
 ];
 
 const FIXTURES: [string, () => Score][] = [
@@ -56,7 +91,7 @@ describe('falling-notes video → Score round trip', () => {
       const t0 = performance.now();
       for (const [fname, make] of FIXTURES) {
         const ref = make();
-        const { estimate, calibration: cal } = detectFromRenders(ref, v.render, v.noise);
+        const { estimate, calibration: cal } = detectFromRenders(ref, v.render, { noise: v.noise, post: v.post?.(v.render) });
         const m = noteF1(ref.notes, estimate.notes, 0.05);
         const hands = handAccuracy(ref, estimate);
         report(

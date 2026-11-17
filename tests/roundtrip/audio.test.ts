@@ -2,6 +2,12 @@
  * Round trip: fixture Score → piano-like synth (22,050 Hz mono) → Basic Pitch (tfjs CPU, model
  * loaded from local files) → post-processing → note F1 (pitch exact, onset ±50 ms).
  * Targets (docs/PLAN.md M4): F1 ≥ 0.85 monophonic, ≥ 0.70 two-hand.
+ *
+ * IMPORTANT: every number printed here is on SYNTHETIC piano audio (additive synth in ./synth.ts),
+ * not on real recordings. Real pianos, rooms, microphones and pedalling will score lower; no real
+ * recording is measured (none can be committed). The post-processing defaults were tuned on a
+ * separate seeded dev set: tests/fixtures/audio-devset.ts, checked by audio-devset.test.ts and
+ * re-tunable with `npm run tune:audio`.
  */
 import { beforeAll, describe, expect, test } from 'vitest';
 import type { GraphModel } from '@tensorflow/tfjs';
