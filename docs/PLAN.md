@@ -69,9 +69,9 @@ Accept: quantization tests on known sequences; output loads in Verovio without e
 Accept: Playwright e2e for each flow (MIDI → practice, MusicXML → sheet, audio → MIDI download, falling-notes video → practice, video export), with screenshots in docs/screenshots/.
 
 ## M8 — Final QA and report
-- [ ] `qa-reviewer` runs everything from a clean install and reviews against this plan and CLAUDE.md.
-- [ ] Fix blockers and high-severity findings; re-run.
-- [ ] Write REPORTE.md in Spanish:
+- [x] `qa-reviewer` runs everything from a clean install and reviews against this plan and CLAUDE.md.
+- [x] Fix blockers and high-severity findings; re-run.
+- [x] Write REPORTE.md in Spanish:
   1. Resumen (3–5 líneas)
   2. Qué funciona (por hito, con capturas)
   3. Qué no funciona o quedó a medias, y por qué
