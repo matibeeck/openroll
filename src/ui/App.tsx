@@ -6,6 +6,7 @@ import { findInputConverter } from '../converters/registry';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import { PracticeView } from './PracticeView';
 import { VideoView } from './VideoView';
+import { defaultSheetSettings, type SheetSettings } from './sheetSettings';
 
 // Sheet music pulls in Verovio (LGPL, WASM): keep it in a separately loaded chunk.
 const SheetView = lazy(() => import('./SheetView'));
@@ -16,7 +17,7 @@ type State =
   | { kind: 'home'; error?: string }
   | { kind: 'ask-video'; file: File }
   | { kind: 'converting'; file: File; progress: number; label?: string }
-  | { kind: 'result'; score: Score; name: string; id: number };
+  | { kind: 'result'; score: Score; name: string; id: number; sheet: SheetSettings };
 
 function fmtDuration(s: number): string {
   const total = Math.round(s);
@@ -49,7 +50,13 @@ function Shell() {
         ac.signal,
       );
       setTab('practice');
-      setState({ kind: 'result', score, name: file.name, id: ++idRef.current });
+      setState({
+        kind: 'result',
+        score,
+        name: file.name,
+        id: ++idRef.current,
+        sheet: defaultSheetSettings(score),
+      });
     } catch (e) {
       if ((e as Error).name === 'AbortError') setState({ kind: 'home' });
       else setState({ kind: 'home', error: t('home.error', { name: file.name, msg: (e as Error).message }) });
@@ -175,9 +182,16 @@ function Shell() {
           </nav>
           <Suspense fallback={<p>{t('sheet.loading')}</p>}>
             {tab === 'practice' && <PracticeView key={state.id} score={state.score} />}
-            {tab === 'sheet' && <SheetView key={state.id} score={state.score} />}
+            {tab === 'sheet' && (
+              <SheetView
+                key={state.id}
+                score={state.score}
+                settings={state.sheet}
+                onSettings={(sheet) => setState({ ...state, sheet })}
+              />
+            )}
             {tab === 'video' && <VideoView key={state.id} score={state.score} />}
-            {tab === 'download' && <DownloadView key={state.id} score={state.score} />}
+            {tab === 'download' && <DownloadView key={state.id} score={state.score} settings={state.sheet} />}
           </Suspense>
         </main>
       )}

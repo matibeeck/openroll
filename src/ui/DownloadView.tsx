@@ -2,10 +2,12 @@ import type { Score } from '../core/score';
 import { scoreToMidiBytes } from '../converters/outputs/midi/scoreToMidi';
 import { MUSICXML_MIME, scoreToMusicXml } from '../converters/outputs/musicxml';
 import { useI18n } from '../i18n';
+import { isFreeTiming } from '../core/quantize';
 import { downloadBlob, safeFileName } from './download';
+import { defaultSheetSettings, quantizeOptions, type SheetSettings } from './sheetSettings';
 
 /** Download tab: MIDI and MusicXML files generated on the device. */
-export default function DownloadView({ score }: { score: Score }) {
+export default function DownloadView({ score, settings }: { score: Score; settings?: SheetSettings }) {
   const { t } = useI18n();
   const base = safeFileName(score.title);
 
@@ -14,7 +16,8 @@ export default function DownloadView({ score }: { score: Score }) {
     downloadBlob(new Blob([bytes.slice().buffer], { type: 'audio/midi' }), `${base}.mid`);
   };
   const downloadMusicXml = () => {
-    downloadBlob(new Blob([scoreToMusicXml(score)], { type: MUSICXML_MIME }), `${base}.musicxml`);
+    const opts = quantizeOptions(isFreeTiming(score), settings ?? defaultSheetSettings(score));
+    downloadBlob(new Blob([scoreToMusicXml(score, opts)], { type: MUSICXML_MIME }), `${base}.musicxml`);
   };
 
   return (

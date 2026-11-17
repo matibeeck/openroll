@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isFreeTiming, quantize, tapTempo } from '../core/quantize';
-import type { Score, TimeSignature } from '../core/score';
+import type { Score } from '../core/score';
+import { defaultSheetSettings, MAX_BPM, MIN_BPM, quantizeOptions, type SheetSettings } from './sheetSettings';
 import { quantizedToMusicXml } from '../converters/outputs/musicxml';
 import { renderSheet, type SheetResult } from '../converters/outputs/sheet';
 import { useI18n } from '../i18n';
 
 const TIME_SIGNATURES = ['2/4', '3/4', '4/4', '5/4', '3/8', '6/8', '9/8', '12/8'];
-const MIN_BPM = 20;
-const MAX_BPM = 400;
-
-function parseTimeSig(s: string): TimeSignature {
-  const [n, d] = s.split('/').map(Number);
-  return { numerator: n || 4, denominator: d || 4 };
-}
 
 interface Request {
   xml: string;
@@ -27,11 +21,27 @@ interface Result {
 }
 
 /** Sheet music tab: quantized two-staff score rendered by Verovio in a worker, one page at a time. */
-export default function SheetView({ score }: { score: Score }) {
+export default function SheetView({
+  score,
+  settings,
+  onSettings,
+}: {
+  score: Score;
+  settings?: SheetSettings;
+  onSettings?: (s: SheetSettings) => void;
+}) {
   const { t } = useI18n();
   const free = useMemo(() => isFreeTiming(score), [score]);
-  const [bpmText, setBpmText] = useState(() => String(Math.round(score.tempos[0]?.bpm ?? 120)));
-  const [timeSig, setTimeSig] = useState(() => `${score.timeSignature.numerator}/${score.timeSignature.denominator}`);
+  const [localSettings, setLocalSettings] = useState(() => defaultSheetSettings(score));
+  const current = settings ?? localSettings;
+  const { bpmText, timeSig } = current;
+  const update = (patch: Partial<SheetSettings>) => {
+    const next = { ...current, ...patch };
+    setLocalSettings(next);
+    onSettings?.(next);
+  };
+  const setBpmText = (bpmText: string) => update({ bpmText });
+  const setTimeSig = (timeSig: string) => update({ timeSig });
   const [scale, setScale] = useState(40);
   const [page, setPage] = useState(0);
   const [width, setWidth] = useState(0);
@@ -51,17 +61,15 @@ export default function SheetView({ score }: { score: Score }) {
     return () => ro.disconnect();
   }, []);
 
-  const bpm = useMemo(() => {
-    const v = Number(bpmText);
-    return Number.isFinite(v) && v >= MIN_BPM && v <= MAX_BPM ? v : undefined;
-  }, [bpmText]);
-
   const quantized = useMemo(
-    () => quantize(score, free ? { bpm, timeSignature: parseTimeSig(timeSig) } : {}),
-    [score, free, bpm, timeSig],
+    () => quantize(score, quantizeOptions(free, { bpmText, timeSig })),
+    [score, free, bpmText, timeSig],
   );
   const xml = useMemo(() => quantizedToMusicXml(quantized), [quantized]);
-  const request = useMemo<Request | null>(() => (width > 0 ? { xml, width, scale } : null), [xml, width, scale]);
+  const request = useMemo<Request | null>(
+    () => (width > 0 ? { xml, width, scale } : null),
+    [xml, width, scale],
+  );
 
   useEffect(() => {
     if (!request) return;
@@ -112,7 +120,11 @@ export default function SheetView({ score }: { score: Score }) {
             </button>
             <label>
               {t('sheet.timeSig')}{' '}
-              <select value={timeSig} onChange={(e) => setTimeSig(e.target.value)} data-testid="sheet-timesig">
+              <select
+                value={timeSig}
+                onChange={(e) => setTimeSig(e.target.value)}
+                data-testid="sheet-timesig"
+              >
                 {TIME_SIGNATURES.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -127,7 +139,9 @@ export default function SheetView({ score }: { score: Score }) {
         <button type="button" onClick={() => setPage(Math.max(0, pageIndex - 1))} disabled={pageIndex <= 0}>
           {t('sheet.prev')}
         </button>
-        <span data-testid="sheet-page">{t('sheet.page', { page: pages.length ? pageIndex + 1 : 0, pages: pages.length })}</span>
+        <span data-testid="sheet-page">
+          {t('sheet.page', { page: pages.length ? pageIndex + 1 : 0, pages: pages.length })}
+        </span>
         <button
           type="button"
           onClick={() => setPage(Math.min(pages.length - 1, pageIndex + 1))}
