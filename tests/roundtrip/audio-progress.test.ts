@@ -43,7 +43,7 @@ describe('audio conversion progress', () => {
   });
 
   for (const [name, o] of [
-    ['the real recording-like 24 s video, warm', { decodeMs: 60, modelMs: 0, windows: 15, windowMs: 32, finishMs: 10, warm: true }],
+    ['real-recording-like 24 s video, warm', { decodeMs: 60, modelMs: 0, windows: 15, windowMs: 32, finishMs: 10, warm: true }],
     ['24 s video, cold model', { decodeMs: 60, modelMs: 380, windows: 15, windowMs: 32, finishMs: 10, warm: false }],
     ['5 min video, warm', { decodeMs: 650, modelMs: 0, windows: 177, windowMs: 32, finishMs: 90, warm: true }],
   ] as const) {
