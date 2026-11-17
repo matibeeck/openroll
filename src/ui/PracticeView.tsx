@@ -113,6 +113,7 @@ export function PracticeView({ score }: { score: Score }) {
     let lastFrame = performance.now();
     let uiTick = 0;
     let size = { w: 0, h: 0 };
+    const renderMs = { avg: 0, worst: 0 };
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const w = wrap.clientWidth;
@@ -162,12 +163,18 @@ export function PracticeView({ score }: { score: Score }) {
         }
       }
       lastT = tNow;
+      const r0 = performance.now();
       renderFrame(ctx, score, tNow, {
         ...settingsRef.current.opts,
         pressed: pressedRef.current,
         width: size.w,
         height: size.h,
       });
+      const rms = performance.now() - r0;
+      renderMs.avg = renderMs.avg ? renderMs.avg * 0.95 + rms * 0.05 : rms;
+      if (transport.playing) renderMs.worst = Math.max(renderMs.worst, rms);
+      canvas.dataset.renderMs = renderMs.avg.toFixed(2);
+      canvas.dataset.worstRenderMs = renderMs.worst.toFixed(2);
       if (++uiTick % 6 === 0) {
         setPosition(tNow);
         setStats(tracker.stats);

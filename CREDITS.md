@@ -9,4 +9,5 @@
 - [React](https://react.dev) — MIT
 
 ## Assets
-- Salamander Grand Piano samples by Alexander Holm — CC-BY 3.0 (see `public/samples/README.md` when present)
+- Salamander Grand Piano samples by Alexander Holm — CC-BY 3.0 (subset served locally from `public/samples/salamander/`, see its README.md); https://archive.org/details/SalamanderGrandPianoV3
+- Basic Pitch model weights (`public/models/basic-pitch/`, copied from the `@spotify/basic-pitch` npm package by `scripts/copy-models.mjs`) © Spotify AB — Apache-2.0. Bittner et al., "A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation", ICASSP 2022.

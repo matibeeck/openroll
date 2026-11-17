@@ -13,9 +13,20 @@ test('MIDI → practice: 5-minute piece plays smoothly; keyboard input is scored
   await page.getByTestId('play').click();
   await page.waitForTimeout(6000);
   const fps = Number(await canvas.getAttribute('data-fps'));
-  console.log(`practice fps (5-minute piece, headless Chromium): ${fps.toFixed(1)}`);
-  writeFileSync('docs/metrics/practice-fps.json', JSON.stringify({ fps, piece: '300 s, 2 hands', date: new Date().toISOString() }));
-  expect(fps).toBeGreaterThan(30);
+  const renderMs = Number(await canvas.getAttribute('data-render-ms'));
+  const worstRenderMs = Number(await canvas.getAttribute('data-worst-render-ms'));
+  console.log(`practice (5-minute piece, headless Chromium): ${fps.toFixed(1)} fps, render ${renderMs} ms avg, ${worstRenderMs} ms worst`);
+  writeFileSync(
+    'docs/metrics/practice-fps.json',
+    JSON.stringify(
+      { fps, renderMsAvg: renderMs, renderMsWorst: worstRenderMs, piece: '300 s, 1350 notes, 2 hands', env: 'headless Chromium (rAF capped at 60 fps)', date: new Date().toISOString() },
+      null,
+      2,
+    ),
+  );
+  expect(fps).toBeGreaterThan(50);
+  // Frame budget at 60 fps is 16.7 ms; drawing must use a small part of it.
+  expect(renderMs).toBeLessThan(8);
   await expect(page.getByTestId('time')).not.toHaveText(/^0:00 \//);
   await page.screenshot({ path: 'docs/screenshots/practice.png' });
   await page.getByTestId('play').click(); // pause

@@ -56,3 +56,43 @@ describe('renderFrame', () => {
     expect(ctx.pixel(c3.x + c3.width / 2, y)).toEqual(parseColor(DEFAULT_HAND_COLORS.L));
   });
 });
+
+describe('labels and octave guides', () => {
+  class Recorder {
+    fillStyle = '';
+    font = '';
+    textAlign: CanvasTextAlign = 'left';
+    textBaseline: CanvasTextBaseline = 'alphabetic';
+    texts: string[] = [];
+    rects: { x: number; w: number; h: number; style: string }[] = [];
+    fillRect(x: number, _y: number, w: number, h: number) {
+      this.rects.push({ x, w, h, style: String(this.fillStyle) });
+    }
+    fillText(t: string) {
+      this.texts.push(t);
+    }
+  }
+  const opts = { width: 1040, height: 600 };
+
+  it('draws no labels when off, letters or solfège when on', () => {
+    const off = new Recorder();
+    renderFrame(off, score, 0.2, opts);
+    expect(off.texts).toEqual([]);
+    const letters = new Recorder();
+    renderFrame(letters, score, 0.2, { ...opts, labels: true, labelStyle: 'letters' });
+    expect(letters.texts).toContain('C'); // falling C4
+    expect(letters.texts).toContain('C4'); // keyboard label
+    const solfege = new Recorder();
+    renderFrame(solfege, score, 0.2, { ...opts, labels: true, labelStyle: 'solfege' });
+    expect(solfege.texts).toContain('Do');
+    expect(solfege.texts).toContain('Do4');
+    expect(solfege.texts).not.toContain('C');
+  });
+
+  it('draws one octave guide per C (8 on an 88-key keyboard)', () => {
+    const r = new Recorder();
+    renderFrame(r, score, 0.2, opts);
+    const guides = r.rects.filter((x) => x.w === 1 && x.style === '#1e293b');
+    expect(guides).toHaveLength(8);
+  });
+});

@@ -1,1 +1,8 @@
-{"fps":60,"piece":"300 s, 2 hands","date":"2026-11-17T01:23:46.235Z"}
+{
+  "fps": 60,
+  "renderMsAvg": 0.03,
+  "renderMsWorst": 0.3,
+  "piece": "300 s, 1350 notes, 2 hands",
+  "env": "headless Chromium (rAF capped at 60 fps)",
+  "date": "2026-11-17T01:26:59.388Z"
+}
