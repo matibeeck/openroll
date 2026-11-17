@@ -79,3 +79,25 @@ export function synthWav(notes: [number, number, number][], sampleRate = 22050):
   for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, pcm[i]!)) * 32767), 44 + i * 2);
   return new Uint8Array(buf);
 }
+
+/**
+ * Screenshot once the page has settled: load event, web fonts, images decoded, finite CSS
+ * animations done and two animation frames painted. Capturing right after a navigation can hit
+ * a page whose first compositor frame isn't ready yet (CDP "Unable to capture screenshot"),
+ * which happened when a heavy test (video encode + recognizer) ran just before.
+ */
+export async function settledScreenshot(page: Page, path: string, opts: { fullPage?: boolean } = {}) {
+  await page.waitForLoadState('load');
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(
+      [...document.images].map((img) => (img.complete ? undefined : img.decode().catch(() => undefined))),
+    );
+    const finite = document
+      .getAnimations()
+      .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime ?? Infinity));
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+  await page.screenshot({ path, ...opts });
+}

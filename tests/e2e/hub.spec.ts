@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openFile, writeTemp } from './helpers';
+import { openFile, settledScreenshot, writeTemp } from './helpers';
 
 /** Silent 1-second 16-bit mono WAV. */
 function silentWav(): Uint8Array {
@@ -24,11 +24,11 @@ test('hub home in Spanish: drop zone, privacy notice, language switch', async ({
   await page.goto('/?lang=es');
   await expect(page.getByRole('heading', { name: 'Suelta lo que sea: MIDI, MusicXML, audio, video' })).toBeVisible();
   await expect(page.getByText('Todo se queda en tu dispositivo')).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/home-es.png' });
+  await settledScreenshot(page, 'docs/screenshots/home-es.png');
   await page.getByLabel('Idioma').selectOption('en');
   await expect(page.getByRole('heading', { name: 'Drop anything: MIDI, MusicXML, audio, video' })).toBeVisible();
   await expect(page.getByText('Everything stays on your device')).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/home.png' });
+  await settledScreenshot(page, 'docs/screenshots/home.png');
 });
 
 test('unknown file types and undecodable audio show clear, translated errors', async ({ page }) => {
@@ -50,5 +50,5 @@ test('videos ask whether they are falling-notes or a real performance', async ({
   await expect(page.getByRole('heading', { name: 'Is this a falling-notes video or a real performance?' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Falling-notes video' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Real performance' })).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/video-question.png' });
+  await settledScreenshot(page, 'docs/screenshots/video-question.png');
 });

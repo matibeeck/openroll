@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { generatedMidi, openFile, synthWav, writeTemp } from './helpers';
+import { generatedMidi, openFile, settledScreenshot, synthWav, writeTemp } from './helpers';
 
 test('video export: 10-second clip plays and has the right duration', async ({ page }) => {
   await page.goto('/?lang=en&clip=10');
@@ -39,7 +39,7 @@ test('video export: 10-second clip plays and has the right duration', async ({ p
   expect(info.played).toBeGreaterThan(0.2);
   expect(Math.abs(info.duration - 10)).toBeLessThanOrEqual(0.2);
   expect(info.rms).toBeGreaterThan(0.005);
-  await page.screenshot({ path: 'docs/screenshots/video-export.png' });
+  await settledScreenshot(page, 'docs/screenshots/video-export.png');
 });
 
 test('video export options: 1080p, 60 fps, light theme, labels', async ({ page }) => {

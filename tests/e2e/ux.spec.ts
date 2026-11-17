@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openFile, synthWav, writeTemp } from './helpers';
+import { openFile, settledScreenshot, synthWav, writeTemp } from './helpers';
 
 /** Records every interaction's latency (input → next paint) with the Event Timing API. */
 async function trackInteractions(page: Page) {
@@ -46,7 +46,7 @@ test('example piece, space bar, repeat section and responsive interactions', asy
   const bar = (await page.getByLabel('Position').boundingBox())!;
   expect(box.width).toBeGreaterThan(4);
   expect(box.width).toBeLessThan(bar.width * 0.5); // only the marked section, not the whole bar
-  await page.screenshot({ path: 'docs/screenshots/repeat-section.png' });
+  await settledScreenshot(page, 'docs/screenshots/repeat-section.png');
   await page.getByRole('button', { name: 'Clear repeat' }).click();
   await expect(band).toHaveCount(0);
 
@@ -77,7 +77,7 @@ test('mobile practice view paints (no black canvas after resize)', async ({ page
     return bright / (d.length / 4);
   });
   expect(lit).toBeGreaterThan(0.5); // white keys visible along the bottom row
-  await page.screenshot({ path: 'docs/screenshots/mobile-practice.png', fullPage: true });
+  await settledScreenshot(page, 'docs/screenshots/mobile-practice.png', { fullPage: true });
 });
 
 test('conversion shows the stage in the UI language and a time estimate', async ({ page }) => {
@@ -86,6 +86,6 @@ test('conversion shows the stage in the UI language and a time estimate', async 
   await openFile(page, writeTemp('eta.wav', synthWav(melody)));
   await expect(page.getByTestId('convert-eta')).toHaveText(/calculando|quedan/);
   await expect(page.getByTestId('convert-status')).not.toContainText(/transcribing|decoding|reading/);
-  await page.screenshot({ path: 'docs/screenshots/converting.png' });
+  await settledScreenshot(page, 'docs/screenshots/converting.png');
   await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 90_000 });
 });

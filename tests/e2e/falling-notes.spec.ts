@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { generatedMidi, openFile, writeTemp } from './helpers';
+import { generatedMidi, openFile, settledScreenshot, writeTemp } from './helpers';
 import { formatMetrics, noteF1, type TimedPitch } from '../roundtrip/metrics';
 
 const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi');
@@ -44,7 +44,7 @@ test('falling-notes video: M3 WebM export → recognizer → practice view', asy
   const summary = page.getByTestId('score-summary');
   await expect(summary).toBeVisible({ timeout: 180_000 });
   const count = Number(/(\d+)/.exec((await summary.textContent()) ?? '')?.[1] ?? 0);
-  await page.screenshot({ path: 'docs/screenshots/falling-notes.png' });
+  await settledScreenshot(page, 'docs/screenshots/falling-notes.png');
 
   // 3. Note F1 through the Download tab's MIDI file.
   await page.getByRole('tab', { name: 'Download' }).click();
@@ -66,7 +66,7 @@ test('falling-notes video: M3 WebM export → recognizer → practice view', asy
   // 4. Manual calibration from the result screen: the dialog opens with the auto values; accepting them gives the same notes.
   await page.getByRole('button', { name: 'Recalibrate keyboard' }).click();
   await expect(page.getByTestId('calibration-dialog')).toBeVisible({ timeout: 60_000 });
-  await page.screenshot({ path: 'docs/screenshots/calibration.png' });
+  await settledScreenshot(page, 'docs/screenshots/calibration.png');
   await page.getByTestId('calibrate-ok').click();
   await expect(page.getByTestId('score-summary')).toContainText(`${count} notes`, { timeout: 180_000 });
 });

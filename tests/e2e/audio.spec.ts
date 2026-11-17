@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { openFile, synthWav, writeTemp } from './helpers';
+import { openFile, settledScreenshot, synthWav, writeTemp } from './helpers';
 
 const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi');
 
@@ -12,7 +12,7 @@ test('audio → notes → MIDI download', async ({ page }) => {
   await page.goto('/?lang=en');
   await openFile(page, writeTemp('scale.wav', wav));
   await expect(page.getByTestId('score-summary')).toBeVisible({ timeout: 90_000 });
-  await page.screenshot({ path: 'docs/screenshots/audio-practice.png' });
+  await settledScreenshot(page, 'docs/screenshots/audio-practice.png');
   await page.getByRole('tab', { name: 'Download' }).click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-midi').click()]);
   expect(download.suggestedFilename()).toMatch(/\.mid$/);
@@ -20,7 +20,7 @@ test('audio → notes → MIDI download', async ({ page }) => {
   const pitches = midi.tracks.flatMap((t) => t.notes).sort((a, b) => a.time - b.time).map((n) => n.midi);
   console.log('transcribed pitches', pitches.join(' '));
   expect(pitches).toEqual(scale);
-  await page.screenshot({ path: 'docs/screenshots/download.png' });
+  await settledScreenshot(page, 'docs/screenshots/download.png');
 });
 
 test('audio → sheet: tempo, tap tempo, time signature and zoom controls for free-timing input', async ({ page }) => {
@@ -65,7 +65,7 @@ test('audio → sheet: tempo, tap tempo, time signature and zoom controls for fr
   await page.getByTestId('sheet-zoom').fill('80');
   await expect.poll(width, { timeout: 15_000 }).not.toBe(before);
   await expect(page.getByTestId('sheet-page')).toContainText('1');
-  await page.screenshot({ path: 'docs/screenshots/audio-sheet.png' });
+  await settledScreenshot(page, 'docs/screenshots/audio-sheet.png');
 
   // The MusicXML download uses the chosen meter.
   await page.getByRole('tab', { name: 'Download' }).click();

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
-import { generatedMidi, openFile, writeTemp } from './helpers';
+import { generatedMidi, openFile, settledScreenshot, writeTemp } from './helpers';
 
 test('MIDI → practice: 5-minute piece plays smoothly; keyboard input is scored', async ({ page }) => {
   await page.goto('/?lang=en');
@@ -28,7 +28,7 @@ test('MIDI → practice: 5-minute piece plays smoothly; keyboard input is scored
   // Frame budget at 60 fps is 16.7 ms; drawing must use a small part of it.
   expect(renderMs).toBeLessThan(8);
   await expect(page.getByTestId('time')).not.toHaveText(/^0:00 \//);
-  await page.screenshot({ path: 'docs/screenshots/practice.png' });
+  await settledScreenshot(page, 'docs/screenshots/practice.png');
   await page.getByTestId('play').click(); // pause
 
   // Wait mode + computer keyboard: the first note is C4 (key "a"), the bass C2 needs two octaves down.

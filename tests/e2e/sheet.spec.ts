@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { minuetInG, pieceToMusicXml } from '../fixtures/music';
-import { openFile, writeTemp } from './helpers';
+import { openFile, settledScreenshot, writeTemp } from './helpers';
 
 test('MusicXML → sheet music, then MIDI and MusicXML downloads', async ({ page }) => {
   await page.goto('/?lang=en');
@@ -17,7 +17,7 @@ test('MusicXML → sheet music, then MIDI and MusicXML downloads', async ({ page
   const noteCount = await sheet.locator('g.note').count();
   console.log(`sheet: ${noteCount} notes engraved on page 1`);
   expect(noteCount).toBeGreaterThan(20);
-  await page.screenshot({ path: 'docs/screenshots/sheet.png', fullPage: true });
+  await settledScreenshot(page, 'docs/screenshots/sheet.png', { fullPage: true });
 
   await page.getByRole('tab', { name: 'Download' }).click();
   const [xmlDownload] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-musicxml').click()]);

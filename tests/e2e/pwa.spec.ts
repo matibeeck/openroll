@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { settledScreenshot } from './helpers';
 
 test('PWA: manifest is installable and the app works offline after the first load', async ({ page, context }) => {
   await page.goto('/?lang=en');
@@ -18,6 +19,6 @@ test('PWA: manifest is installable and the app works offline after the first loa
   await page.reload();
   await expect(page.getByRole('heading', { name: 'OpenRoll' })).toBeVisible();
   await expect(page.getByTestId('dropzone')).toBeVisible();
-  await page.screenshot({ path: 'docs/screenshots/home-offline.png' });
+  await settledScreenshot(page, 'docs/screenshots/home-offline.png');
   await context.setOffline(false);
 });
