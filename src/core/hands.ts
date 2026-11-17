@@ -5,11 +5,6 @@ export interface AssignHandsOptions {
   splitPitch?: number;
 }
 
-/** Notes within this many semitones of the split are ambiguous and follow voice continuity. */
-const CONTINUITY_ZONE = 5;
-/** A previous note older than this (seconds since it ended) no longer counts as "recent". */
-const CONTINUITY_WINDOW = 1.0;
-
 /**
  * Guess a hand from a track or staff name. Returns undefined when the name says nothing.
  * Recognizes: left/right, LH/RH, "Piano left", bass/treble, staff 1/2 (1 = right, 2 = left),
@@ -30,56 +25,129 @@ export function trackHands(tracks: TrackInfo[]): (Hand | undefined)[] {
   return tracks.map((t) => (t.hand !== undefined && t.hand !== null ? t.hand : handFromName(t.name)));
 }
 
+/** Largest comfortable span of one hand: a ninth (14 semitones). */
+export const MAX_HAND_SPAN = 14;
+/** Onsets closer than this are one chord for hand separation (hands are rarely exactly together). */
+const CHORD_TOLERANCE = 0.035;
+const BEAM = 32;
+
+interface HandPos {
+  lo: number;
+  hi: number;
+  /** Last onset and last release of this hand (seconds). */
+  time: number;
+  end: number;
+}
+
+interface Hyp {
+  cost: number;
+  L: HandPos | null;
+  R: HandPos | null;
+  /** Index of the parent hypothesis in the previous beam, and how many chord tones went left. */
+  parent: number;
+  split: number;
+}
+
 /**
- * Assign hands by pitch split with simple voice continuity: a note far from the split goes to
- * the obvious hand; a note within CONTINUITY_ZONE of the split goes to the hand whose most
- * recent note is closest in pitch (if that note is recent enough), else by the split.
- * Chord tones (same onset) are decided together so a chord is never split arbitrarily across
- * the line: each tone is still judged on its own pitch, but continuity is looked up against
- * notes before the chord, not against other tones of the same chord.
+ * Cost of giving `tones` (ascending pitches of one chord) to a hand that was last at `prev`.
+ * - span: more than MAX_HAND_SPAN is (nearly) unplayable; 13–14 is mildly penalized;
+ * - more than 5 tones in one hand is impossible;
+ * - register: a weak pull towards the split, stronger far from it (an L note two octaves above
+ *   middle C is unlikely);
+ * - leap: a jump of the hand's center beyond a fifth/sixth (7 semitones) from where it last
+ *   played, weighted more when there was little time to move.
+ */
+function handCost(h: 'L' | 'R', tones: number[], prev: HandPos | null, t: number, split: number): number {
+  if (tones.length === 0) return 0;
+  const lo = tones[0]!;
+  const hi = tones[tones.length - 1]!;
+  let c = 0;
+  const span = hi - lo;
+  if (span > MAX_HAND_SPAN) c += 6 + 1.5 * (span - MAX_HAND_SPAN);
+  else if (span > 12) c += 0.3 * (span - 12);
+  if (tones.length > 5) c += 10 * (tones.length - 5);
+  for (const p of tones) {
+    const beyond = h === 'L' ? p - split : split - p;
+    if (beyond > 0) c += 0.1 * beyond + 0.12 * Math.max(0, beyond - 7);
+  }
+  if (prev) {
+    const dt = t - prev.time;
+    const center = (lo + hi) / 2;
+    const prevCenter = (prev.lo + prev.hi) / 2;
+    const leap = Math.abs(center - prevCenter);
+    const w = dt < 0.15 ? 1.5 : dt < 1 ? 1 : dt < 3 ? 0.5 : 0.15;
+    c += 0.1 * w * Math.max(0, leap - 7);
+  }
+  return c;
+}
+
+/** Hands crossing: a right-hand tone below the left hand's notes that are still sounding (or vice versa). */
+function crossCost(lTones: number[], rTones: number[], L: HandPos | null, R: HandPos | null, t: number): number {
+  let c = 0;
+  const recent = (p: HandPos | null) => p !== null && p.end > t - 0.15;
+  if (rTones.length && recent(L) && rTones[0]! < L!.hi) c += 0.4 * (L!.hi - rTones[0]!);
+  if (lTones.length && recent(R) && lTones[lTones.length - 1]! > R!.lo) c += 0.4 * (lTones[lTones.length - 1]! - R!.lo);
+  return c;
+}
+
+/**
+ * Assign hands by voice leading and hand span. Onsets within 35 ms form a chord; each chord is
+ * split at one point (tones below go left, so a right-hand tone is never below a left-hand tone
+ * of the same chord), and a beam search over the chords minimizes the total cost: spans wider
+ * than a ninth, more than five tones per hand, notes far into the other hand's register, leaps
+ * from where the hand last played, and crossing the other hand's sounding notes. With nothing
+ * else to decide, notes go by the split pitch (default C4).
  */
 export function splitHands(notes: Note[], splitPitch = 60): Hand[] {
   const order = notes.map((_, i) => i).sort((a, b) => notes[a]!.start - notes[b]!.start || notes[a]!.pitch - notes[b]!.pitch);
-  const out: Hand[] = new Array<Hand>(notes.length).fill(null);
-  const last: Record<'L' | 'R', { pitch: number; end: number } | null> = { L: null, R: null };
+  const groups: number[][] = [];
+  for (const i of order) {
+    const g = groups[groups.length - 1];
+    if (g && notes[i]!.start - notes[g[0]!]!.start <= CHORD_TOLERANCE) g.push(i);
+    else groups.push([i]);
+  }
+  for (const g of groups) g.sort((a, b) => notes[a]!.pitch - notes[b]!.pitch);
 
-  let i = 0;
-  while (i < order.length) {
-    const t = notes[order[i]!]!.start;
-    let j = i;
-    while (j < order.length && Math.abs(notes[order[j]!]!.start - t) < 1e-3) j++;
-    const group = order.slice(i, j);
-    const decided: { idx: number; hand: 'L' | 'R' }[] = [];
-    for (const idx of group) {
-      const n = notes[idx]!;
-      let hand: 'L' | 'R' = n.pitch >= splitPitch ? 'R' : 'L';
-      if (Math.abs(n.pitch - splitPitch) <= CONTINUITY_ZONE) {
-        let best: { hand: 'L' | 'R'; dist: number } | null = null;
-        for (const h of ['L', 'R'] as const) {
-          const prev = last[h];
-          if (!prev || t - prev.end > CONTINUITY_WINDOW) continue;
-          const dist = Math.abs(prev.pitch - n.pitch);
-          if (!best || dist < best.dist) best = { hand: h, dist };
-        }
-        if (best) hand = best.hand;
+  const beams: Hyp[][] = [];
+  let beam: Hyp[] = [{ cost: 0, L: null, R: null, parent: -1, split: 0 }];
+  for (const g of groups) {
+    const tones = g.map((i) => notes[i]!.pitch);
+    const t = notes[g[0]!]!.start;
+    const end = Math.max(...g.map((i) => notes[i]!.start + notes[i]!.duration));
+    const next: Hyp[] = [];
+    beam.forEach((h, hi) => {
+      for (let k = 0; k <= tones.length; k++) {
+        const l = tones.slice(0, k);
+        const r = tones.slice(k);
+        const cost =
+          h.cost + handCost('L', l, h.L, t, splitPitch) + handCost('R', r, h.R, t, splitPitch) + crossCost(l, r, h.L, h.R, t);
+        const pos = (ts: number[], prev: HandPos | null): HandPos | null =>
+          ts.length ? { lo: ts[0]!, hi: ts[ts.length - 1]!, time: t, end } : prev;
+        next.push({ cost, L: pos(l, h.L), R: pos(r, h.R), parent: hi, split: k });
       }
-      decided.push({ idx, hand });
+    });
+    // Keep the best hypothesis per hand position, then the BEAM best overall.
+    next.sort((a, b) => a.cost - b.cost);
+    const seen = new Set<string>();
+    beam = [];
+    for (const h of next) {
+      const key = `${h.L?.lo},${h.L?.hi},${h.R?.lo},${h.R?.hi}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      beam.push(h);
+      if (beam.length >= BEAM) break;
     }
-    // A chord tone in the right hand can never sit below a left-hand tone of the same chord.
-    const lowestR = Math.min(...decided.filter((d) => d.hand === 'R').map((d) => notes[d.idx]!.pitch));
-    for (const d of decided) {
-      if (d.hand === 'L' && notes[d.idx]!.pitch > lowestR) d.hand = 'R';
-    }
-    for (const d of decided) out[d.idx] = d.hand;
-    // Remember, per hand, the chord tone nearest the split (highest L, lowest R): that is the
-    // voice the next ambiguous note is most likely to continue.
-    for (const h of ['L', 'R'] as const) {
-      const tones = decided.filter((d) => d.hand === h).map((d) => notes[d.idx]!);
-      if (tones.length === 0) continue;
-      const pick = tones.reduce((a, b) => (h === 'L' ? (b.pitch > a.pitch ? b : a) : b.pitch < a.pitch ? b : a));
-      last[h] = { pitch: pick.pitch, end: Math.max(...tones.map((n) => n.start + n.duration)) };
-    }
-    i = j;
+    beams.push(beam);
+  }
+
+  const out: Hand[] = new Array<Hand>(notes.length).fill(null);
+  let idx = 0;
+  for (let gi = groups.length - 1; gi >= 0; gi--) {
+    const h = beams[gi]![idx]!;
+    groups[gi]!.forEach((noteIdx, j) => {
+      out[noteIdx] = j < h.split ? 'L' : 'R';
+    });
+    idx = h.parent;
   }
   return out;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignHands, handFromName, splitHands } from '../../src/core/hands';
+import { assignHands, handFromName, MAX_HAND_SPAN, splitHands } from '../../src/core/hands';
 import { createScore, type Note } from '../../src/core/score';
 
 function n(pitch: number, start: number, duration = 0.5, track = 0): Note {
@@ -108,5 +108,36 @@ describe('assignHands', () => {
     });
     // Input not mutated.
     expect(score.notes.every((x) => x.hand === null)).toBe(true);
+  });
+});
+
+describe('splitHands: span and voice leading', () => {
+  it('keeps left-hand chords that reach above middle C in the left hand under right-hand octaves', () => {
+    // Ballade-like bar: RH C5–C6 octaves; LH A♭2 bass with E♭3–C4 and F3–D♭4 chords.
+    const notes = [
+      n(72, 0), n(84, 0), n(44, 0), n(51, 0.25), n(60, 0.25), n(51, 0.5), n(60, 0.5),
+      n(72, 0.5), n(84, 0.5), n(39, 0.75), n(53, 1), n(61, 1), n(72, 1), n(84, 1), n(53, 1.25), n(61, 1.25),
+    ];
+    const hands = splitHands(notes);
+    notes.forEach((x, i) => expect(hands[i], `${x.pitch}@${x.start}`).toBe(x.pitch >= 72 ? 'R' : 'L'));
+  });
+
+  it('never gives one hand more than a ninth when the chord can be split', () => {
+    // C3 E3 G3 · E4 G4 C5: 24 semitones; the split gives each hand ≤ 14.
+    const chord = [48, 52, 55, 64, 67, 72].map((p) => n(p, 0));
+    const hands = splitHands(chord);
+    for (const h of ['L', 'R'] as const) {
+      const ps = chord.filter((_, i) => hands[i] === h).map((x) => x.pitch);
+      if (ps.length) expect(Math.max(...ps) - Math.min(...ps)).toBeLessThanOrEqual(MAX_HAND_SPAN);
+    }
+  });
+
+  it('lets the right hand take a low note when the left hand is far away and busy', () => {
+    // LH bass octave C2/C3 every beat; RH melody G4 F4 E4 D4 C4 B3 C4 (B3 below the split).
+    const melody = [67, 65, 64, 62, 60, 59, 60].map((p, i) => n(p, i * 0.5, 0.45));
+    const bass = [0, 0.5, 1, 1.5, 2, 2.5, 3].flatMap((t) => [n(36, t, 0.45), n(48, t, 0.45)]);
+    const out = assignHands(createScore({ notes: [...melody, ...bass] }));
+    expect(out.notes.filter((x) => x.pitch >= 59).every((x) => x.hand === 'R')).toBe(true);
+    expect(out.notes.filter((x) => x.pitch <= 48).every((x) => x.hand === 'L')).toBe(true);
   });
 });

@@ -37,12 +37,14 @@ test('audio → sheet: tempo, tap tempo, time signature and zoom controls for fr
 
   const notesAt = async () => sheet.locator('g.note').count();
   const barsAt = async () => sheet.locator('g.measure').count();
-  const bars120 = await barsAt();
+  const barsAtEstimate = await barsAt();
+  const estimatedBpm = Number(await bpm.inputValue());
+  expect(estimatedBpm).toBeGreaterThan(0); // prefilled with the estimated tempo
   expect(await notesAt()).toBeGreaterThan(0);
 
-  // Halving the tempo halves the number of beats → fewer bars.
-  await bpm.fill('60');
-  await expect.poll(barsAt, { timeout: 15_000 }).toBeLessThan(bars120);
+  // Halving the estimated tempo halves the number of beats → fewer bars.
+  await bpm.fill(String(Math.round(estimatedBpm / 2)));
+  await expect.poll(barsAt, { timeout: 15_000 }).toBeLessThan(barsAtEstimate);
 
   // Time signature 3/4 renders a 3/4 meter.
   await page.getByTestId('sheet-timesig').selectOption('3/4');

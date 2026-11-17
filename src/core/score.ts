@@ -35,6 +35,12 @@ export interface KeySignature {
   mode: 'major' | 'minor';
 }
 
+/** Sustain pedal (MIDI CC64) held down from `start` to `end`, in seconds. */
+export interface PedalSpan {
+  start: number;
+  end: number;
+}
+
 export interface TrackInfo {
   name: string;
   /** Hand hint derived from the track/staff name, if any. */
@@ -50,6 +56,11 @@ export interface Score {
   tempos: TempoEvent[];
   timeSignature: TimeSignature;
   key?: KeySignature;
+  /**
+   * Sustain pedal spans, sorted, non-overlapping (optional: only sources that know it, e.g.
+   * MIDI CC64). Notation uses it to tell held notes from rests.
+   */
+  pedal?: PedalSpan[];
 }
 
 export const MIN_PITCH = 21;

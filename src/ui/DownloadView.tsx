@@ -16,7 +16,8 @@ export default function DownloadView({ score, settings }: { score: Score; settin
     downloadBlob(new Blob([bytes.slice().buffer], { type: 'audio/midi' }), `${base}.mid`);
   };
   const downloadMusicXml = () => {
-    const opts = quantizeOptions(isFreeTiming(score), settings ?? defaultSheetSettings(score));
+    const free = isFreeTiming(score);
+    const opts = quantizeOptions(score, free, settings ?? defaultSheetSettings(score, free));
     downloadBlob(new Blob([scoreToMusicXml(score, opts)], { type: MUSICXML_MIME }), `${base}.musicxml`);
   };
 

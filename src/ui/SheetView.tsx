@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isFreeTiming, quantize, tapTempo } from '../core/quantize';
 import type { Score } from '../core/score';
-import { defaultSheetSettings, MAX_BPM, MIN_BPM, quantizeOptions, type SheetSettings } from './sheetSettings';
+import {
+  defaultSheetSettings,
+  GRID_CHOICES,
+  MAX_BPM,
+  MIN_BPM,
+  parseTimeSig,
+  quantizeOptions,
+  sheetEstimate,
+  tonicName,
+  tsText,
+  withTimeSig,
+  type SheetSettings,
+} from './sheetSettings';
+import { isCompound } from '../converters/outputs/musicxml/layout';
 import { quantizedToMusicXml } from '../converters/outputs/musicxml';
 import { renderSheet, type SheetResult } from '../converters/outputs/sheet';
 import { useI18n } from '../i18n';
@@ -30,18 +43,24 @@ export default function SheetView({
   settings?: SheetSettings;
   onSettings?: (s: SheetSettings) => void;
 }) {
-  const { t } = useI18n();
   const free = useMemo(() => isFreeTiming(score), [score]);
-  const [localSettings, setLocalSettings] = useState(() => defaultSheetSettings(score));
+  const { t, lang } = useI18n();
+  const [localSettings, setLocalSettings] = useState(() => defaultSheetSettings(score, free));
   const current = settings ?? localSettings;
   const { bpmText, timeSig } = current;
-  const update = (patch: Partial<SheetSettings>) => {
-    const next = { ...current, ...patch };
+  const simplify = current.simplify ?? false;
+  const grid = current.grid ?? 'auto';
+  const replace = (next: SheetSettings) => {
     setLocalSettings(next);
     onSettings?.(next);
   };
+  const update = (patch: Partial<SheetSettings>) => replace({ ...current, ...patch });
   const setBpmText = (bpmText: string) => update({ bpmText });
-  const setTimeSig = (timeSig: string) => update({ timeSig });
+  const setTimeSig = (ts: string) => replace(withTimeSig(score, current, ts));
+  const estimate = useMemo(() => (free ? sheetEstimate(score) : null), [score, free]);
+  // The tempo field counts the meter's beat: ♩. in 6/8, 9/8, 12/8; ♪ in 3/8; ♩ otherwise.
+  const meter = parseTimeSig(timeSig);
+  const beatUnit = isCompound(meter) ? '♩.' : meter.denominator === 8 ? '♪' : '♩';
   const [scale, setScale] = useState(40);
   const [page, setPage] = useState(0);
   const [width, setWidth] = useState(0);
@@ -62,8 +81,8 @@ export default function SheetView({
   }, []);
 
   const quantized = useMemo(
-    () => quantize(score, quantizeOptions(free, { bpmText, timeSig })),
-    [score, free, bpmText, timeSig],
+    () => quantize(score, quantizeOptions(score, free, { bpmText, timeSig, simplify, grid })),
+    [score, free, bpmText, timeSig, simplify, grid],
   );
   const xml = useMemo(() => quantizedToMusicXml(quantized), [quantized]);
   const request = useMemo<Request | null>(
@@ -101,10 +120,21 @@ export default function SheetView({
     <section ref={wrapRef} className="sheet" aria-label="sheet">
       {free && (
         <>
-          <p className="notice">{t('sheet.freeHint')}</p>
+          <p className="notice" data-testid="sheet-estimate">
+            {estimate
+              ? t('sheet.estimated', {
+                  meter: tsText(estimate.timeSignature),
+                  unit: isCompound(estimate.timeSignature) ? '♩.' : '♩',
+                  bpm: Math.round(estimate.beatBpm),
+                  key: t(quantized.key.mode === 'minor' ? 'sheet.key.minor' : 'sheet.key.major', {
+                    tonic: tonicName(quantized.key, lang === 'es'),
+                  }),
+                })
+              : t('sheet.freeHint')}
+          </p>
           <div className="controls">
             <label>
-              {t('sheet.bpm')}{' '}
+              {t('sheet.bpm', { unit: beatUnit })}{' '}
               <input
                 type="number"
                 min={MIN_BPM}
@@ -131,6 +161,25 @@ export default function SheetView({
                   </option>
                 ))}
               </select>
+            </label>
+            <label>
+              {t('sheet.grid')}{' '}
+              <select value={grid} onChange={(e) => update({ grid: e.target.value })} data-testid="sheet-grid">
+                {GRID_CHOICES.map((g) => (
+                  <option key={g} value={g}>
+                    {g === 'auto' ? t('sheet.grid.auto') : `1/${g}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={simplify}
+                onChange={(e) => update({ simplify: e.target.checked })}
+                data-testid="sheet-simplify"
+              />{' '}
+              {t('sheet.simplify')}
             </label>
           </div>
         </>

@@ -3,8 +3,8 @@
  * Staff 1 (treble) = right hand, staff 2 (bass) = left hand; notes without a hand go by pitch.
  */
 import { quantize, type QuantizeOptions, type QuantizedScore } from '../../../core/quantize';
-import type { KeySignature, Score } from '../../../core/score';
-import { assignVoices, beatTicks, buildChords, voicePieces, type Piece } from './layout';
+import type { KeySignature, Score, TimeSignature } from '../../../core/score';
+import { assignVoices, beatTicks, buildChords, isCompound, voicePieces, type Piece } from './layout';
 
 export interface ScoreToMusicXmlOptions extends QuantizeOptions {
   /** Maximum voices per staff. Default 2. */
@@ -13,14 +13,7 @@ export interface ScoreToMusicXmlOptions extends QuantizeOptions {
 
 // ---------------------------------------------------------------- pitch spelling
 
-const SHARP_SPELL: [string, number][] = [
-  ['C', 0], ['C', 1], ['D', 0], ['D', 1], ['E', 0], ['F', 0], ['F', 1], ['G', 0], ['G', 1], ['A', 0], ['A', 1], ['B', 0],
-];
-const FLAT_SPELL: [string, number][] = [
-  ['C', 0], ['D', -1], ['D', 0], ['E', -1], ['E', 0], ['F', 0], ['G', -1], ['G', 0], ['A', -1], ['A', 0], ['B', -1], ['B', 0],
-];
 const SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
-const STEP_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
 export interface Spelled {
   step: string;
@@ -28,19 +21,53 @@ export interface Spelled {
   octave: number;
 }
 
-/** Spell a MIDI pitch for a key: sharps in sharp keys and C, flats in flat keys; key notes use the key's spelling. */
-export function spell(pitch: number, key: KeySignature): Spelled {
+/** Spelling at line-of-fifths position q (C = 0, G = 1, F = −1, F# = 6, Bb = −2…). */
+function fromFifths(q: number): { step: string; alter: number } {
+  const i = q + 1; // F = 0
+  return { step: SHARP_ORDER[((i % 7) + 7) % 7]!, alter: Math.floor(i / 7) };
+}
+
+/** The two or three line-of-fifths positions that spell pitch class pc with at most two accidentals. */
+function candidates(pc: number): number[] {
+  const q0 = (pc * 7) % 12; // 7 is its own inverse mod 12
+  const out: number[] = [];
+  for (let q = q0 - 24; q <= q0 + 24; q += 12) if (q >= -15 && q <= 19) out.push(q);
+  return out;
+}
+
+/**
+ * Spell a MIDI pitch for a key on the line of fifths. Notes of the key use the key's spelling.
+ * A chromatic note takes the spelling closest to the key's center (two fifths above the tonic
+ * of the major key, three for minor so raised 6th/7th are sharps): in A♭ major that gives
+ * D♭, G♭, A♮, D♮; in C major C♯, E♭, F♯, B♭. Ties go to the spelling with fewer accidentals,
+ * then to flats when `preferFlats` (default: in flat keys; the writer passes the piece's own
+ * leaning, so G♯/A♭ in C major follows the B♭s or F♯s around it). `direction` (+1 / −1) is where the line goes next: when two spellings
+ * are about equally close, a note leading a semitone up is spelled raised (E♮→F in A♭ major),
+ * one leading down lowered (D♭→C in C major).
+ */
+export function spell(pitch: number, key: KeySignature, direction = 0, preferFlats = key.fifths < 0): Spelled {
   const pc = ((pitch % 12) + 12) % 12;
-  const keyAlter = keyAlterations(key);
-  // Prefer the spelling that the key signature already provides (e.g. Cb in Gb major, E# in C# major).
-  for (const [step, alter] of Object.entries(keyAlter)) {
-    if (((STEP_PC[step]! + alter + 12) % 12) === pc) {
-      const octave = Math.floor((pitch - alter) / 12) - 1;
-      return { step, alter, octave };
+  const f = Math.max(-7, Math.min(7, key.fifths));
+  const center = f + (key.mode === 'minor' ? 3 : 2);
+  const cands = candidates(pc);
+  const diatonic = cands.find((q) => q >= f - 1 && q <= f + 5);
+  let q: number;
+  if (diatonic !== undefined) {
+    q = diatonic;
+  } else {
+    const scored = cands
+      .map((c) => ({ c, cost: Math.abs(c - center) + (Math.abs(fromFifths(c).alter) > 1 ? 3 : 0) }))
+      .sort((a, b) => a.cost - b.cost || Math.abs(fromFifths(a.c).alter) - Math.abs(fromFifths(b.c).alter) || (preferFlats ? a.c - b.c : b.c - a.c));
+    q = scored[0]!.c;
+    if (direction !== 0) {
+      // Among the close spellings (no double accidentals, within two fifths of the best), raise
+      // or lower to follow the line; a clear default (F♯ in C major) stays.
+      const ok = scored.filter((x) => Math.abs(fromFifths(x.c).alter) <= 1 && x.cost <= scored[0]!.cost + 2).map((x) => x.c);
+      if (ok.length > 1) q = direction > 0 ? Math.max(...ok) : Math.min(...ok);
     }
   }
-  const [step, alter] = (key.fifths < 0 ? FLAT_SPELL : SHARP_SPELL)[pc]!;
-  return { step, alter, octave: Math.floor(pitch / 12) - 1 };
+  const { step, alter } = fromFifths(q);
+  return { step, alter, octave: Math.floor((pitch - alter) / 12) - 1 };
 }
 
 /** Steps altered by a key signature: step → alter. */
@@ -66,10 +93,13 @@ function fmtBpm(bpm: number): string {
   return String(Math.round(bpm * 100) / 100);
 }
 
-function tempoDirection(bpm: number): string {
-  const shown = Math.round(bpm);
+/** Metronome mark in the meter's beat unit (♩. in 6/8, 9/8, 12/8); `<sound tempo>` stays in quarters. */
+function tempoDirection(bpm: number, ts: TimeSignature): string {
+  const compound = isCompound(ts) && ts.denominator === 8;
+  const unit = compound ? '<beat-unit>quarter</beat-unit><beat-unit-dot/>' : '<beat-unit>quarter</beat-unit>';
+  const shown = Math.round(compound ? bpm / 1.5 : bpm);
   return (
-    `<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit>` +
+    `<direction placement="above"><direction-type><metronome>${unit}` +
     `<per-minute>${shown}</per-minute></metronome></direction-type><staff>1</staff><sound tempo="${fmtBpm(bpm)}"/></direction>`
   );
 }
@@ -111,8 +141,57 @@ export function layoutStreams(q: QuantizedScore, maxVoices = 2): { streams: Stre
   return { streams, totalTicks };
 }
 
+type Spellings = Map<Piece, Map<number, Spelled>>;
+
+/**
+ * Spell every chord piece of every staff. A chromatic note looks at the next onset of its staff
+ * for a note a semitone away (its resolution); a tied continuation keeps its first spelling.
+ */
+function spellAll(streams: Stream[], key: KeySignature): Spellings {
+  const out: Spellings = new Map();
+  // Which side the piece's unambiguous chromatic notes lean to decides the ambiguous ones.
+  let lean = 0;
+  for (const st of streams) {
+    for (const p of st.pieces) {
+      if (p.kind !== 'chord' || p.tieStop) continue;
+      for (const pitch of p.pitches) {
+        const flat = spell(pitch, key, 0, true);
+        const sharp = spell(pitch, key, 0, false);
+        if (flat.step === sharp.step && flat.alter !== (keyAlterations(key)[flat.step] ?? 0)) lean += flat.alter < 0 ? 1 : flat.alter > 0 ? -1 : 0;
+      }
+    }
+  }
+  const preferFlats = lean !== 0 ? lean > 0 : key.fifths < 0;
+  for (const staff of [1, 2]) {
+    const pieces = streams
+      .filter((s) => s.staff === staff)
+      .flatMap((s) => s.pieces.filter((p) => p.kind === 'chord').map((p) => ({ p, voice: s.voice })))
+      .sort((a, b) => a.p.start - b.p.start);
+    const held = new Map<string, Spelled>(); // voice:pitch → spelling of the tied note
+    pieces.forEach(({ p, voice }, i) => {
+      const m = new Map<number, Spelled>();
+      const next = pieces.slice(i + 1).find((x) => x.p.start > p.start && !x.p.tieStop);
+      for (const pitch of p.pitches) {
+        const id = `${voice}:${pitch}`;
+        let sp = p.tieStop ? held.get(id) : undefined;
+        if (!sp) {
+          let dir = 0;
+          if (next?.p.pitches.includes(pitch + 1)) dir = 1;
+          else if (next?.p.pitches.includes(pitch - 1)) dir = -1;
+          sp = spell(pitch, key, dir, preferFlats);
+        }
+        m.set(pitch, sp);
+        if (p.tieStart) held.set(id, sp);
+        else held.delete(id);
+      }
+      out.set(p, m);
+    });
+  }
+  return out;
+}
+
 /** Decide which notes print an accidental: per staff and measure, in time order, against the key. */
-function accidentals(streams: Stream[], q: QuantizedScore): Map<Piece, Map<number, number | null>> {
+function accidentals(streams: Stream[], q: QuantizedScore, spellings: Spellings): Map<Piece, Map<number, number | null>> {
   const result = new Map<Piece, Map<number, number | null>>();
   const keyAlter = keyAlterations(q.key);
   for (const staff of [1, 2]) {
@@ -128,7 +207,7 @@ function accidentals(streams: Stream[], q: QuantizedScore): Map<Piece, Map<numbe
       }
       const marks = new Map<number, number | null>();
       for (const pitch of p.pitches) {
-        const s = spell(pitch, q.key);
+        const s = spellings.get(p)?.get(pitch) ?? spell(pitch, q.key);
         const id = `${s.step}${s.octave}`;
         const current = state.get(id) ?? keyAlter[s.step] ?? 0;
         if (p.tieStop) {
@@ -182,7 +261,7 @@ function beams(pieces: Piece[], measureStart: number, beat: number): Map<Piece, 
   return out;
 }
 
-function noteXml(p: Piece, staff: number, voice: number, acc: Map<number, number | null> | undefined, beamTags: string[] | undefined, q: QuantizedScore): string[] {
+function noteXml(p: Piece, staff: number, voice: number, acc: Map<number, number | null> | undefined, beamTags: string[] | undefined, q: QuantizedScore, spelled: Map<number, Spelled> | undefined): string[] {
   const value = p.value;
   const typeXml = value ? `<type>${value.type}</type>${value.dots ? '<dot/>' : ''}` : '';
   if (p.kind === 'rest') {
@@ -193,7 +272,7 @@ function noteXml(p: Piece, staff: number, voice: number, acc: Map<number, number
     .slice()
     .reverse() // top note first reads naturally; order does not matter for MusicXML
     .map((pitch, i) => {
-      const s = spell(pitch, q.key);
+      const s = spelled?.get(pitch) ?? spell(pitch, q.key);
       const alterXml = s.alter ? `<alter>${s.alter}</alter>` : '';
       const ties = `${p.tieStop ? '<tie type="stop"/>' : ''}${p.tieStart ? '<tie type="start"/>' : ''}`;
       const mark = acc?.get(pitch);
@@ -209,9 +288,10 @@ function noteXml(p: Piece, staff: number, voice: number, acc: Map<number, number
 }
 
 /** Write a quantized score as MusicXML. */
-export function quantizedToMusicXml(q: QuantizedScore, maxVoices = 2): string {
+export function quantizedToMusicXml(q: QuantizedScore, maxVoices = q.maxVoices ?? 2): string {
   const { streams, totalTicks } = layoutStreams(q, maxVoices);
-  const acc = accidentals(streams, q);
+  const spellings = spellAll(streams, q.key);
+  const acc = accidentals(streams, q, spellings);
   const beat = beatTicks(q.timeSignature, q.divisions);
   const measures = totalTicks / q.measureTicks;
   const tempoAt = new Map(q.tempos.map((t) => [t.tick, t.bpm]));
@@ -243,13 +323,13 @@ export function quantizedToMusicXml(q: QuantizedScore, maxVoices = 2): string {
       for (const p of inMeasure) {
         if (si === 0) {
           const bpm = tempoAt.get(p.start);
-          if (bpm !== undefined) out.push(tempoDirection(bpm));
+          if (bpm !== undefined) out.push(tempoDirection(bpm, q.timeSignature));
         }
         if (p.kind === 'forward') {
           out.push(`<forward><duration>${p.duration}</duration><voice>${stream.voice}</voice><staff>${stream.staff}</staff></forward>`);
           continue;
         }
-        out.push(...noteXml(p, stream.staff, stream.voice, acc.get(p), beamMap.get(p), q));
+        out.push(...noteXml(p, stream.staff, stream.voice, acc.get(p), beamMap.get(p), q, spellings.get(p)));
       }
     });
     if (m === measures - 1) out.push('<barline location="right"><bar-style>light-heavy</bar-style></barline>');
@@ -262,5 +342,6 @@ export function quantizedToMusicXml(q: QuantizedScore, maxVoices = 2): string {
 
 /** Score → MusicXML 4.0 string (two-staff piano). */
 export function scoreToMusicXml(score: Score, opts: ScoreToMusicXmlOptions = {}): string {
-  return quantizedToMusicXml(quantize(score, opts), opts.maxVoices ?? 2);
+  const q = quantize(score, opts);
+  return quantizedToMusicXml(q, opts.maxVoices ?? q.maxVoices ?? 2);
 }

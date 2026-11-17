@@ -284,3 +284,40 @@ describe('Score → MIDI → Score', () => {
     ]);
   });
 });
+
+describe('sustain pedal (CC64)', () => {
+  it('Score.pedal → MIDI → Score keeps the spans within 1 ms', () => {
+    const notes: Note[] = [0, 0.5, 1, 1.5].map((t, i) => ({ pitch: 60 + i, start: t, duration: 0.2, velocity: 0.7, hand: 'R', track: 0 }));
+    const pedal = [
+      { start: 0.01, end: 0.95 },
+      { start: 1.02, end: 2.0 },
+    ];
+    for (const format of [0, 1] as const) {
+      const back = midiBytesToScore(scoreToMidiBytes(createScore({ notes, pedal }), { format }));
+      expect(back.pedal?.length).toBe(2);
+      back.pedal!.forEach((p, i) => {
+        expect(Math.abs(p.start - pedal[i]!.start)).toBeLessThanOrEqual(MS);
+        expect(Math.abs(p.end - pedal[i]!.end)).toBeLessThanOrEqual(MS);
+      });
+    }
+    // No pedal → no field.
+    expect(midiBytesToScore(scoreToMidiBytes(createScore({ notes }))).pedal).toBeUndefined();
+  });
+
+  it('reads CC64 written by another app, merging half-pedal values at ≥ 64 as down', () => {
+    const bytes = encodeSmf({
+      format: 0,
+      ppq: 480,
+      tracks: [
+        [
+          { tick: 0, type: 'noteOn', channel: 0, pitch: 60, velocity: 80 },
+          { tick: 0, type: 'controller', channel: 0, controller: 64, value: 100 },
+          { tick: 240, type: 'controller', channel: 0, controller: 64, value: 70 }, // still down
+          { tick: 480, type: 'noteOff', channel: 0, pitch: 60 },
+          { tick: 960, type: 'controller', channel: 0, controller: 64, value: 10 },
+        ],
+      ],
+    });
+    expect(midiBytesToScore(bytes).pedal).toEqual([{ start: 0, end: 1 }]);
+  });
+});

@@ -10,6 +10,7 @@ export type SmfEvent =
   | { tick: number; type: 'timeSignature'; numerator: number; denominator: number }
   | { tick: number; type: 'keySignature'; fifths: number; minor: boolean }
   | { tick: number; type: 'program'; channel: number; program: number }
+  | { tick: number; type: 'controller'; channel: number; controller: number; value: number }
   | { tick: number; type: 'noteOff'; channel: number; pitch: number }
   | { tick: number; type: 'noteOn'; channel: number; pitch: number; velocity: number };
 
@@ -20,15 +21,16 @@ export interface SmfFile {
   tracks: SmfEvent[][];
 }
 
-/** Order of events that share a tick: meta first, then program, note-offs, note-ons. */
+/** Order of events that share a tick: meta first, then program, controllers, note-offs, note-ons. */
 const PRIORITY: Record<SmfEvent['type'], number> = {
   trackName: 0,
   tempo: 1,
   timeSignature: 2,
   keySignature: 3,
   program: 4,
-  noteOff: 5,
-  noteOn: 6,
+  controller: 5,
+  noteOff: 6,
+  noteOn: 7,
 };
 
 export function writeVarLen(value: number, out: number[]): void {
@@ -79,6 +81,9 @@ function encodeEvent(e: SmfEvent, out: number[]): void {
     }
     case 'program':
       out.push(0xc0 | (e.channel & 0x0f), clamp7(e.program));
+      break;
+    case 'controller':
+      out.push(0xb0 | (e.channel & 0x0f), clamp7(e.controller), clamp7(e.value));
       break;
     case 'noteOff':
       out.push(0x80 | (e.channel & 0x0f), clamp7(e.pitch), 0x40);

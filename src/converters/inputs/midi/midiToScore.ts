@@ -6,6 +6,7 @@ import {
   MIN_PITCH,
   type KeySignature,
   type Note,
+  type PedalSpan,
   type Score,
   type TimeSignature,
   type TrackInfo,
@@ -53,10 +54,40 @@ export function keyFromName(key: string, scale: string): KeySignature | undefine
 }
 
 /**
+ * Sustain pedal spans from CC64 (down at ≥ 64) on any melodic channel, merged across tracks.
+ * A pedal still down at the end of the file is released at the end of the file.
+ */
+export function sustainSpans(midi: Midi): PedalSpan[] {
+  const spans: PedalSpan[] = [];
+  for (const t of midi.tracks) {
+    if (t.channel === PERCUSSION_CHANNEL) continue;
+    const ccs = [...(t.controlChanges[64] ?? [])].sort((a, b) => a.ticks - b.ticks);
+    let down: number | null = null;
+    for (const cc of ccs) {
+      const isDown = cc.value >= 64 / 127 - 1e-6;
+      if (isDown && down === null) down = cc.time;
+      else if (!isDown && down !== null) {
+        if (cc.time > down) spans.push({ start: down, end: cc.time });
+        down = null;
+      }
+    }
+    if (down !== null && midi.duration > down) spans.push({ start: down, end: midi.duration });
+  }
+  spans.sort((a, b) => a.start - b.start);
+  const merged: PedalSpan[] = [];
+  for (const s of spans) {
+    const prev = merged[merged.length - 1];
+    if (prev && s.start <= prev.end) prev.end = Math.max(prev.end, s.end);
+    else merged.push({ ...s });
+  }
+  return merged;
+}
+
+/**
  * Parse a Standard MIDI File (format 0 or 1) into a Score.
  * - Times come from the file's tempo map (seconds); the tempo map is kept in Score.tempos.
  * - Percussion (channel 10) and pitches outside the piano range (21–108) are dropped.
- * - The first time signature and key signature are kept.
+ * - The first time signature and key signature are kept; sustain pedal (CC64) becomes Score.pedal.
  * - Empty tracks are dropped; track names are kept for hand assignment.
  */
 export function midiBytesToScore(bytes: Uint8Array, title?: string, opts: MidiToScoreOptions = {}): Score {
@@ -94,6 +125,8 @@ export function midiBytesToScore(bytes: Uint8Array, title?: string, opts: MidiTo
     }
   });
 
+  const pedal = sustainSpans(midi);
+
   const header = midi.header;
   const tempos = normalizeTempos(
     header.tempos.map((t) => ({ time: t.time ?? header.ticksToSeconds(t.ticks), bpm: t.bpm })),
@@ -121,6 +154,7 @@ export function midiBytesToScore(bytes: Uint8Array, title?: string, opts: MidiTo
     tempos,
     timeSignature,
     ...(key ? { key } : {}),
+    ...(pedal.length ? { pedal } : {}),
   });
   return opts.hands === false ? score : assignHands(score, { splitPitch: opts.splitPitch });
 }

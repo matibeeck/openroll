@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateKey, isFreeTiming, quantize, tapTempo } from '../../src/core/quantize';
+import { autoDivisions, estimateKey, gridDivisions, isFreeTiming, legatoDurations, pedalEnd, quantize, tapTempo } from '../../src/core/quantize';
 import { createScore, type Note } from '../../src/core/score';
 import { assignVoices, buildChords, decompose, noteValues, voicePieces } from '../../src/converters/outputs/musicxml/layout';
 import { cMajorScale, minuetInG, pieceToScore, p } from '../fixtures/music';
@@ -191,5 +191,105 @@ describe('notation layout', () => {
     });
     const desc = pieces.map((x) => `${x.kind}@${x.start}+${x.duration}${x.tieStop ? '<' : ''}${x.tieStart ? '>' : ''}${x.measureRest ? 'M' : ''}`);
     expect(desc).toEqual(['rest@0+8', 'rest@8+4', 'chord@12+4>', 'chord@16+4<', 'rest@20+4', 'rest@24+8']);
+  });
+});
+
+describe('legato quantization (recordings)', () => {
+  const sixEight = { numerator: 6, denominator: 8 };
+  // Eighth = 0.25 s at quarter = 120; divisions 2 → one tick per eighth.
+  const opts = { bpm: 120, timeSignature: sixEight, divisions: 2, legato: true, alignFirstNote: false } as const;
+
+  it('extends a note to the next onset of its hand (no rest for a short articulation gap)', () => {
+    // RH: ♩ ♪ ♩ ♪ played staccato (each note lasts 0.15 s).
+    const notes = [0, 0.5, 0.75, 1.25].map((t) => n(72, t, 0.15));
+    const q = quantize(createScore({ notes }), opts);
+    expect(q.notes.map((x) => [x.start, x.duration])).toEqual([
+      [0, 2],
+      [2, 1],
+      [3, 2],
+      [5, 1], // last note: extended to the end of its beat
+    ]);
+  });
+
+  it('keeps a rest for a real silence but starts it on a beat', () => {
+    // Note at 0 lasting 0.3 s, next note 1.5 s later (six eighths: a whole bar of 6/8).
+    const q = quantize(createScore({ notes: [n(72, 0, 0.3), n(74, 1.5, 0.2)] }), opts);
+    expect(q.notes[0]!.duration).toBe(3); // to the end of beat 1, rest from beat 2
+  });
+
+  it('cuts a note that rings over the next onsets, but keeps a held bass as its own voice', () => {
+    const notes = [
+      n(44, 0, 1.5, 'L'), // bass ringing a whole bar
+      n(63, 0.25, 0.6, 'L'), // chord tones ringing (decay) over the next ones
+      n(63, 0.5, 0.6, 'L'),
+      n(51, 0.75, 0.75, 'L'), // the bass moves at beat 2: the held A♭ stops there
+      n(63, 1.0, 0.6, 'L'),
+    ];
+    const q = quantize(createScore({ notes }), opts);
+    const byStart = (s: number, p: number) => q.notes.find((x) => x.start === s && x.pitch === p)!;
+    expect(byStart(0, 44).duration).toBe(3);
+    expect(byStart(1, 63).duration).toBe(1);
+    expect(byStart(3, 51).duration).toBe(1);
+    // Simplify: everything stops at the next onset of the hand.
+    const s = quantize(createScore({ notes }), { ...opts, simplify: true });
+    expect(s.notes.find((x) => x.pitch === 44)!.duration).toBe(1);
+    expect(s.maxVoices).toBe(1);
+  });
+
+  it('holds notes through the sustain pedal instead of writing rests', () => {
+    const notes = [n(60, 0, 0.2, 'L'), n(62, 1.5, 0.2, 'L')];
+    const dry = quantize(createScore({ notes }), opts);
+    expect(dry.notes[0]!.duration).toBe(3);
+    const wet = quantize(createScore({ notes, pedal: [{ start: 0, end: 1.45 }] }), opts);
+    expect(wet.notes[0]!.duration).toBe(6);
+    expect(pedalEnd(0.2, [{ start: 0, end: 1.45 }])).toBe(1.45);
+    expect(pedalEnd(1.5, [{ start: 0, end: 1.45 }])).toBe(1.5);
+  });
+
+  it('simplify merges ornaments into the main note and never invents notes', () => {
+    // A grace note 40 ms before the main note, and a quick turn before the next one.
+    const notes = [n(74, 0.0, 0.04), n(72, 0.06, 0.45), n(74, 0.5, 0.05), n(72, 0.55, 0.05), n(71, 0.6, 0.05), n(72, 0.65, 0.4)];
+    const plain = quantize(createScore({ notes }), { bpm: 120, alignFirstNote: false });
+    const simple = quantize(createScore({ notes }), { bpm: 120, alignFirstNote: false, simplify: true });
+    expect(simple.notes.length).toBeLessThan(plain.notes.length);
+    expect(simple.dropped).toBe(notes.length - simple.notes.length);
+    expect(simple.notes.every((x) => notes.some((m) => m.pitch === x.pitch))).toBe(true);
+    expect(simple.divisions).toBe(2);
+  });
+});
+
+describe('quantize on a tracked pulse (rubato)', () => {
+  it('maps onsets through the pulse timeline, not a constant tempo', () => {
+    // Eighth pulses that slow down from 0.25 s to 0.4 s; notes sit exactly on them.
+    const pulses = [0];
+    for (let k = 0; k < 24; k++) pulses.push(pulses[k]! + 0.25 + (0.15 * k) / 24);
+    const notes = [0, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17].map((k) => n(72, pulses[k]!, 0.1));
+    const q = quantize(createScore({ notes }), {
+      timeline: { pulses, pulseQuarters: 0.5, bpm: 90 },
+      timeSignature: { numerator: 6, denominator: 8 },
+      divisions: 2,
+    });
+    expect(q.notes.map((x) => x.start)).toEqual([0, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17]);
+    expect(q.tempos).toEqual([{ tick: 0, bpm: 90 }]);
+  });
+
+  it('picks eighths for plain eighth-note rhythms and sixteenths when they are needed', () => {
+    expect(autoDivisions([0, 0.5, 1, 1.5, 2, 3], 0.15)).toBe(2);
+    expect(autoDivisions([0, 0.25, 0.5, 0.75, 1, 1.25], 0.15)).toBe(4);
+    expect(autoDivisions([0, 0.25, 0.5, 0.75], 0.06)).toBe(2); // sixteenths faster than 90 ms
+    expect(gridDivisions(32, 0.2)).toBe(8);
+    expect(gridDivisions(16, 0.2, true)).toBe(2);
+  });
+});
+
+describe('legatoDurations', () => {
+  it('never shortens below one tick nor lengthens past the next onset of the hand', () => {
+    const notes = [
+      { pitch: 60, start: 0, duration: 1, hand: 'R' as const, velocity: 1 },
+      { pitch: 64, start: 1, duration: 1, hand: 'R' as const, velocity: 1 },
+      { pitch: 48, start: 0, duration: 1, hand: 'L' as const, velocity: 1 },
+    ];
+    const out = legatoDurations(notes, [0.5, 1.6, 0.5], { beat: 4, measure: 16, simplify: true });
+    expect(out.map((x) => x.duration)).toEqual([1, 3, 4]);
   });
 });

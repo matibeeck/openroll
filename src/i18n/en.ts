@@ -64,11 +64,17 @@ export const en = {
   'sheet.prev': 'Previous page',
   'sheet.next': 'Next page',
   'sheet.zoom': 'Zoom',
-  'sheet.bpm': 'Tempo (BPM)',
+  'sheet.bpm': 'Tempo ({unit} per minute)',
   'sheet.tap': 'Tap tempo',
   'sheet.timeSig': 'Time signature',
   'sheet.error': 'Could not render the sheet: {msg}',
   'sheet.freeHint': 'This piece has no fixed beat (e.g. a recording). Set the tempo and time signature so the bars line up.',
+  'sheet.estimated': 'Detected from the recording: {meter}, {unit} = {bpm}, {key}. Change the tempo or time signature if the bars do not line up.',
+  'sheet.key.major': '{tonic} major',
+  'sheet.key.minor': '{tonic} minor',
+  'sheet.grid': 'Shortest note',
+  'sheet.grid.auto': 'Auto',
+  'sheet.simplify': 'Simplify (easier to read)',
   'sheet.dropped': '{count} very short notes were left out of the sheet.',
   'download.midi': 'Download MIDI',
   'download.musicxml': 'Download MusicXML',
@@ -113,6 +119,7 @@ export const en = {
   'video.preview': 'Preview',
   'video.estimate': 'Exporting takes about {time} (the video is recorded in real time).',
   'practice.score.idle': 'Play along and your hits and accuracy will show up here.',
+  'stage.loading-model': 'loading the note model',
 } as const;
 
 export type Messages = Record<keyof typeof en, string>;

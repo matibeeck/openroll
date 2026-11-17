@@ -4,9 +4,24 @@
  *
  * Rules: snap onsets to the grid; notes whose onsets lie within `chordTolerance` of each other
  * form one chord and snap together; drop notes shorter than `minDuration`; never invent notes.
+ * For recordings (`legato`), note ends follow the next onset of the same hand, so the sheet is
+ * not littered with rests and ties from articulation and decay.
  */
-import type { Hand, KeySignature, Note, Score, TempoEvent, TimeSignature } from './score';
+import { pulseIndex } from './meter';
+import type { Hand, KeySignature, Note, PedalSpan, Score, TempoEvent, TimeSignature } from './score';
 import { normalizeTempos, secondsToBeats } from './tempo';
+
+/** A tracked pulse grid (see estimateMeter): pulse times in seconds, pulses[0] on a downbeat. */
+export interface PulseTimeline {
+  pulses: number[];
+  /** Quarter notes per pulse. */
+  pulseQuarters: number;
+  /** Tempo to print (quarter notes per minute). */
+  bpm: number;
+}
+
+/** Smallest note value of the grid: 'auto' picks 1/16 unless sixteenths would be faster than 90 ms. */
+export type GridChoice = 'auto' | 8 | 16 | 32;
 
 export interface QuantizeOptions {
   /** Use this constant tempo instead of the Score's tempo map (free-timing input). */
@@ -14,8 +29,26 @@ export interface QuantizeOptions {
   /** With `bpm`: shift time so the first note starts on beat 1. Default true when `bpm` is set. */
   alignFirstNote?: boolean;
   timeSignature?: TimeSignature;
-  /** Grid ticks per quarter note: 4 = 1/16 (default), 2 = 1/8, 8 = 1/32. */
+  /**
+   * Follow this tracked pulse grid (rubato-aware) instead of a constant tempo; overrides `bpm`
+   * and the Score's tempo map.
+   */
+  timeline?: PulseTimeline;
+  /** Grid ticks per quarter note: 4 = 1/16 (default), 2 = 1/8, 8 = 1/32. Overrides `grid`. */
   divisions?: number;
+  /** Smallest note value when `divisions` is not given. Default 16 (or 'auto' with a timeline). */
+  grid?: GridChoice;
+  /**
+   * Recording mode: extend each note to the next onset of its hand (sustain pedal included),
+   * keep rests only for silences longer than a beat, and start them on a beat.
+   */
+  legato?: boolean;
+  /**
+   * Easier reading: one grid level coarser, ornaments (very short notes right before another
+   * note of the same hand) merged into the main note, one voice per staff, rests only for
+   * silences longer than a bar.
+   */
+  simplify?: boolean;
   /** Onsets closer than this (seconds) are one chord. Default 0.035. */
   chordTolerance?: number;
   /** Notes shorter than this many grid steps are dropped as noise. Default 0.25. */
@@ -49,8 +82,10 @@ export interface QuantizedScore {
   /** Sorted by start, then pitch. */
   notes: QNote[];
   measureTicks: number;
-  /** Notes dropped as too short. */
+  /** Notes dropped as too short (or merged as ornaments). */
   dropped: number;
+  /** Voices per staff for the notation layout (1 when simplified). */
+  maxVoices?: number;
 }
 
 export function measureTicks(ts: TimeSignature, divisions: number): number {
@@ -73,33 +108,97 @@ export function clusterOnsets(onsets: number[], tol: number): number[][] {
   return groups;
 }
 
+/** Ticks per quarter for a grid choice; 'auto' keeps sixteenths at ≥ 90 ms, else eighths. */
+export function gridDivisions(grid: GridChoice, sixteenthSeconds: number, simplify = false): number {
+  let div = grid === 'auto' ? (sixteenthSeconds >= 0.09 ? 4 : 2) : grid / 4;
+  if (simplify) div = Math.max(2, div / 2);
+  return div;
+}
+
+/**
+ * Automatic grid from the onsets themselves: eighths, unless more than 30 % of the onsets sit
+ * clearly between eighths (and sixteenths last at least 90 ms). `onsets` are in quarter notes.
+ */
+export function autoDivisions(onsets: number[], sixteenthSeconds: number): number {
+  if (sixteenthSeconds < 0.09 || onsets.length === 0) return 2;
+  const between = onsets.filter((b) => Math.abs(b * 2 - Math.round(b * 2)) > 0.3).length;
+  return between / onsets.length > 0.3 ? 4 : 2;
+}
+
+/** Note end in seconds, held by the sustain pedal when the key is released while it is down. */
+export function pedalEnd(end: number, pedal: PedalSpan[] | undefined): number {
+  if (!pedal) return end;
+  for (const p of pedal) if (p.start <= end && end < p.end) return p.end;
+  return end;
+}
+
+function median(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor(s.length / 2)]! : 0;
+}
+
 export function quantize(score: Score, opts: QuantizeOptions = {}): QuantizedScore {
-  const divisions = opts.divisions ?? 4;
-  const chordTol = opts.chordTolerance ?? 0.035;
+  // Hands in a recording are rarely together: a wider window keeps their chords in one onset.
+  const chordTol = opts.chordTolerance ?? (opts.legato ? 0.06 : 0.035);
   const minDur = opts.minDuration ?? 0.25;
   const splitPitch = opts.splitPitch ?? 60;
   const timeSignature = opts.timeSignature ?? score.timeSignature;
+  const simplify = opts.simplify ?? false;
 
   let tempoMap: TempoEvent[];
   let offset = 0;
-  if (opts.bpm && opts.bpm > 0) {
-    tempoMap = [{ time: 0, bpm: opts.bpm }];
-    const first = score.notes.reduce((m, n) => Math.min(m, n.start), Infinity);
-    if ((opts.alignFirstNote ?? true) && Number.isFinite(first)) offset = first;
+  let toBeats: (s: number) => number;
+  let sixteenth: number;
+  const tl = opts.timeline && opts.timeline.pulses.length >= 2 ? opts.timeline : undefined;
+  if (tl) {
+    tempoMap = [{ time: 0, bpm: tl.bpm }];
+    toBeats = (s) => Math.max(0, pulseIndex(tl.pulses, s) * tl.pulseQuarters);
+    const period = median(tl.pulses.slice(1).map((t, i) => t - tl.pulses[i]!));
+    sixteenth = (period * 0.25) / tl.pulseQuarters;
   } else {
-    tempoMap = normalizeTempos(score.tempos);
+    if (opts.bpm && opts.bpm > 0) {
+      tempoMap = [{ time: 0, bpm: opts.bpm }];
+      const first = score.notes.reduce((m, n) => Math.min(m, n.start), Infinity);
+      if ((opts.alignFirstNote ?? true) && Number.isFinite(first)) offset = first;
+    } else {
+      tempoMap = normalizeTempos(score.tempos);
+    }
+    toBeats = (s) => secondsToBeats(tempoMap, Math.max(0, s - offset));
+    sixteenth = 15 / tempoMap[0]!.bpm;
   }
-  const toBeats = (s: number) => secondsToBeats(tempoMap, Math.max(0, s - offset));
+  const gridChoice = opts.grid ?? (tl ? 'auto' : 16);
+  const divisions =
+    opts.divisions ??
+    (gridChoice === 'auto' && !simplify ? autoDivisions(score.notes.map((n) => toBeats(n.start)), sixteenth) : gridDivisions(gridChoice, sixteenth, simplify));
+  const beat = beatTicksOf(timeSignature, divisions);
+  const measure = measureTicks(timeSignature, divisions);
+  const hand = (n: Note) => staffHand(n.hand, n.pitch, splitPitch);
 
   // Drop micro-notes (measured in grid steps at their position) before anything else.
+  // Simplify also merges ornaments: a note under half a grid step followed within one step by
+  // another note of the same hand.
   let dropped = 0;
   const kept: Note[] = [];
-  for (const n of score.notes) {
-    const steps = (toBeats(n.start + n.duration) - toBeats(n.start)) * divisions;
-    if (steps < minDur) dropped++;
+  const byStart = [...score.notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  byStart.forEach((n, i) => {
+    const b0 = toBeats(n.start);
+    const steps = (toBeats(n.start + n.duration) - b0) * divisions;
+    let ornament = false;
+    if (simplify && steps < 0.5) {
+      const h = hand(n);
+      for (let j = i + 1; j < byStart.length; j++) {
+        const m = byStart[j]!;
+        const d = (toBeats(m.start) - b0) * divisions;
+        if (d > 1) break;
+        if (m.start - n.start > chordTol && hand(m) === h) {
+          ornament = true;
+          break;
+        }
+      }
+    }
+    if (steps < minDur || ornament) dropped++;
     else kept.push(n);
-  }
-  kept.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  });
 
   // Chord tones snap together: each cluster snaps to the grid point nearest its mean onset.
   const startTick = new Array<number>(kept.length);
@@ -112,17 +211,18 @@ export function quantize(score: Score, opts: QuantizeOptions = {}): QuantizedSco
     for (const i of group) startTick[i] = tick;
   }
 
-  const raw: QNote[] = kept.map((n, i) => {
+  const ends = kept.map((n) => toBeats(opts.legato ? pedalEnd(n.start + n.duration, score.pedal) : n.start + n.duration) * divisions);
+  let raw: QNote[] = kept.map((n, i) => {
     const start = startTick[i]!;
-    const end = Math.round(toBeats(n.start + n.duration) * divisions);
     return {
       pitch: n.pitch,
       start,
-      duration: Math.max(1, end - start),
-      hand: staffHand(n.hand, n.pitch, splitPitch),
+      duration: Math.max(1, Math.round(ends[i]!) - start),
+      hand: hand(n),
       velocity: n.velocity,
     };
   });
+  if (opts.legato) raw = legatoDurations(raw, ends, { beat, measure, simplify });
 
   const tempos: QTempo[] = [];
   for (const t of tempoMap) {
@@ -139,9 +239,71 @@ export function quantize(score: Score, opts: QuantizeOptions = {}): QuantizedSco
     key: opts.key ?? score.key ?? estimateKey(score.notes),
     tempos,
     notes: resolveSamePitch(raw),
-    measureTicks: measureTicks(timeSignature, divisions),
+    measureTicks: measure,
     dropped,
+    ...(simplify ? { maxVoices: 1 } : {}),
   };
+}
+
+/** Ticks per beat (dotted quarter in compound meters). */
+function beatTicksOf(ts: TimeSignature, divisions: number): number {
+  const unit = (4 * divisions) / ts.denominator;
+  const compound = ts.denominator >= 8 && ts.numerator % 3 === 0 && ts.numerator > 3;
+  return Math.max(1, Math.round(compound ? unit * 3 : unit));
+}
+
+/**
+ * Legato durations for recordings. Per hand, with `next` = the next onset of that hand:
+ * - a note that sounds until `next`, or stops less than `restMax` before it (one beat; one bar
+ *   when simplifying), ends exactly at `next`: articulation gaps do not become rests;
+ * - a longer silence keeps a rest, but the note is extended to the next beat so the rest starts
+ *   on a beat; the last note of a hand always lasts to the end of its beat;
+ * - unless simplifying, the lowest (highest) tone of a chord that rings on for more than a beat
+ *   past `next` is kept as a held voice until the bass (melody) moves again (a note within a
+ *   fifth above (below) it).
+ * `ends` are the raw note ends in grid ticks (not rounded, pedal included).
+ */
+export function legatoDurations(notes: QNote[], ends: number[], o: { beat: number; measure: number; simplify: boolean }): QNote[] {
+  const restMax = o.simplify ? o.measure : o.beat;
+  const out = notes.map((n) => ({ ...n }));
+  for (const h of ['L', 'R'] as const) {
+    const idx = out.map((_, i) => i).filter((i) => out[i]!.hand === h);
+    const onsets = [...new Set(idx.map((i) => out[i]!.start))].sort((a, b) => a - b);
+    const chordAt = new Map<number, number[]>();
+    for (const i of idx) chordAt.set(out[i]!.start, [...(chordAt.get(out[i]!.start) ?? []), out[i]!.pitch]);
+    const ceilBeat = (t: number) => Math.ceil(t / o.beat - 1e-9) * o.beat;
+    for (const i of idx) {
+      const n = out[i]!;
+      const end = ends[i]!;
+      const k = onsets.findIndex((t) => t > n.start);
+      const next = k >= 0 ? onsets[k]! : undefined;
+      let e: number;
+      if (next === undefined) {
+        e = ceilBeat(end);
+      } else if (next - end <= restMax) {
+        e = next;
+        const chord = chordAt.get(n.start)!;
+        const lowest = n.pitch === Math.min(...chord);
+        const highest = n.pitch === Math.max(...chord);
+        if (!o.simplify && end >= next + o.beat && (lowest || highest)) {
+          // Held voice: until the same outer voice moves (a lower bass / a higher melody note).
+          let cut = Math.round(end);
+          for (let j = k; j < onsets.length && onsets[j]! < cut; j++) {
+            const c = chordAt.get(onsets[j]!)!;
+            if ((lowest && Math.min(...c) <= n.pitch + 7) || (highest && !lowest && Math.max(...c) >= n.pitch - 7)) {
+              cut = onsets[j]!;
+              break;
+            }
+          }
+          e = Math.max(next, cut);
+        }
+      } else {
+        e = Math.min(next, Math.max(Math.round(end), ceilBeat(end)));
+      }
+      n.duration = Math.max(1, e - n.start);
+    }
+  }
+  return out;
 }
 
 /**
@@ -206,9 +368,11 @@ export function tapTempo(taps: number[]): number | null {
   return Math.round((60000 / mean) * 10) / 10;
 }
 
-// Krumhansl–Kessler key profiles (C major / C minor).
-const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+// Temperley's key profiles (Kostka–Payne corpus; C major / C minor). Compared with
+// Krumhansl–Kessler they weigh the tonic triad less against the 6th, so a melody that keeps
+// repeating the 3rd (C in A♭ major) is not read as the relative minor's tonic.
+const MAJOR_PROFILE = [0.748, 0.06, 0.488, 0.082, 0.67, 0.46, 0.096, 0.715, 0.104, 0.366, 0.057, 0.4];
+const MINOR_PROFILE = [0.712, 0.084, 0.474, 0.618, 0.049, 0.46, 0.105, 0.747, 0.404, 0.067, 0.133, 0.33];
 /** Major-key tonic pitch class → circle-of-fifths position (Db, Eb, F#… spelled conventionally). */
 const FIFTHS_OF_MAJOR = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5];
 
@@ -226,10 +390,25 @@ function correlation(a: number[], b: number[]): number {
   return da && db ? num / Math.sqrt(da * db) : 0;
 }
 
-/** Krumhansl–Schmuckler key estimate from a duration-weighted pitch-class histogram. */
-export function estimateKey(notes: Pick<Note, 'pitch' | 'duration'>[]): KeySignature {
+/**
+ * Krumhansl–Schmuckler key estimate (Temperley's profiles) from a pitch-class histogram weighted
+ * by duration (capped at 1.5 s, so pedalled or decaying notes do not dominate) with bass notes
+ * (lowest of their onset, below C4) counted twice: the bass carries the harmony.
+ */
+export function estimateKey(notes: (Pick<Note, 'pitch' | 'duration'> & { start?: number })[]): KeySignature {
   const hist = new Array<number>(12).fill(0);
-  for (const n of notes) hist[n.pitch % 12]! += n.duration;
+  const sorted = [...notes].sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  let j = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const n = sorted[i]!;
+    let bass = false;
+    if (n.start !== undefined && n.pitch < 60) {
+      while (sorted[j]!.start! < n.start - 0.05) j++;
+      bass = true;
+      for (let k = j; k < sorted.length && sorted[k]!.start! <= n.start + 0.05; k++) if (sorted[k]!.pitch < n.pitch) bass = false;
+    }
+    hist[((n.pitch % 12) + 12) % 12]! += Math.min(n.duration, 1.5) * (bass ? 2 : 1);
+  }
   if (hist.every((x) => x === 0)) return { fifths: 0, mode: 'major' };
   let best = { score: -Infinity, tonic: 0, mode: 'major' as 'major' | 'minor' };
   for (let tonic = 0; tonic < 12; tonic++) {

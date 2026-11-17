@@ -114,7 +114,19 @@ function noteEvents(notes: Note[], channel: number, toTick: (s: number) => numbe
   return events;
 }
 
-/** Encode a Score as a Standard MIDI File. Preserves tempo map, time signature and key. */
+/** CC64 down (127) / up (0) events for the Score's sustain pedal spans. */
+function pedalEvents(score: Score, channel: number, toTick: (s: number) => number): SmfEvent[] {
+  return (score.pedal ?? []).flatMap((p): SmfEvent[] => {
+    const start = toTick(p.start);
+    const end = Math.max(start + 1, toTick(p.end));
+    return [
+      { tick: start, type: 'controller', channel, controller: 64, value: 127 },
+      { tick: end, type: 'controller', channel, controller: 64, value: 0 },
+    ];
+  });
+}
+
+/** Encode a Score as a Standard MIDI File. Preserves tempo map, time signature, key and sustain pedal. */
 export function scoreToMidiBytes(score: Score, opts: ScoreToMidiOptions = {}): Uint8Array {
   const format = opts.format ?? 1;
   const ppq = opts.ppq ?? 960;
@@ -132,6 +144,8 @@ export function scoreToMidiBytes(score: Score, opts: ScoreToMidiOptions = {}): U
   const tracks = planned.map((t, i) => {
     const channel = channelFor(i);
     const events: SmfEvent[] = [{ tick: 0, type: 'program', channel, program: 0 }, ...noteEvents(t.notes, channel, toTick)];
+    // Sustain pedal (CC64) goes on the first part's channel.
+    if (i === 0) events.push(...pedalEvents(score, channel, toTick));
     return { name: t.name, events };
   });
 

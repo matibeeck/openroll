@@ -84,6 +84,8 @@ export interface DecomposeContext {
  *   (no half note on beat 2 of 4/4), else on a beat (a half note on beat 2 of 3/4 is fine);
  * - a value that starts off the beat does not cross the next beat;
  * - in even simple meters (2/4, 4/4…) a value that does not start the bar does not cross its middle;
+ * - in compound meters (6/8…) values inside a beat may start on any pulse (♪♩ is fine), values of
+ *   a beat or more start on a beat;
  * - rests are never dotted in simple meter.
  * The smallest value (1 tick) always fits, so this terminates.
  */
@@ -102,7 +104,15 @@ export function decompose(offset: number, duration: number, ctx: DecomposeContex
         if (ctx.rest && x.dots && !compound) return false;
         if (!onBeat && pos + x.ticks > nextBeat) return false;
         if (half && pos % half !== 0 && pos < half && pos + x.ticks > half) return false;
-        const base = compound ? x.ticks : x.dots ? (x.ticks * 2) / 3 : x.ticks;
+        if (compound) {
+          // Compound meter: inside a beat any value that fits and starts on the pulse grid
+          // (♩♪ and ♪♩ are both idiomatic); a beat or longer starts on a beat.
+          const r = pos % beat;
+          if (x.ticks >= beat) return r === 0 && x.ticks % beat === 0;
+          const pulse = beat / 3;
+          return r + x.ticks <= beat && (x.ticks < pulse || r % pulse === 0);
+        }
+        const base = x.dots ? (x.ticks * 2) / 3 : x.ticks;
         const align = measureTicks % base === 0 ? base : Math.min(base, beat);
         return pos % align === 0;
       }) ?? values[values.length - 1]!;
