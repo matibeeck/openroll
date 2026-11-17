@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DEFAULT_TRANSCRIPTION_MODE } from '../../src/converters/inputs/audio/mode';
 
 // Real-recording sheet check (not part of `npm run test:e2e`): the recording stays on the user's
@@ -7,7 +9,7 @@ import { DEFAULT_TRANSCRIPTION_MODE } from '../../src/converters/inputs/audio/mo
 // Chromium may lack AAC.
 // Run: npm run real-check:sheet   (config: scripts/real-check/sheet.config.ts, port 4191)
 // REAL_RECORDING=/path/file.mov is required (there is no default path); SHOT=name the screenshot name
-// (default docs/screenshots/real-recording-sheet.png); REAL_MODE=fast|precise the transcription mode
+// (written to the OS temp folder, never into the repo: it is derived from a private recording); REAL_MODE=fast|precise the transcription mode
 // (default: the app's default). Prints meter, key, tempo, rests per staff-bar and asserts meter 6/8,
 // key F major (−1), no sharps, ≤ 1 rest per staff-bar (REAL_EXPECT changes the first two).
 const file = process.env.REAL_RECORDING ?? '';
@@ -52,7 +54,9 @@ test('real recording → sheet', async ({ page }) => {
   await page.waitForTimeout(1000);
   const bpm = page.getByTestId('sheet-bpm');
   if (await bpm.count()) console.log('sheet controls: bpm', await bpm.inputValue(), 'meter', await page.getByTestId('sheet-timesig').inputValue());
-  await page.screenshot({ path: `docs/screenshots/${shot}.png`, fullPage: true });
+  const shotPath = join(tmpdir(), `${shot}.png`);
+  await page.screenshot({ path: shotPath, fullPage: true });
+  console.log(`[real-check] screenshot: ${shotPath}`);
 
   await page.getByRole('tab', { name: 'Download' }).click();
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-musicxml').click()]);

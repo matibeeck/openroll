@@ -8,6 +8,7 @@
 //
 //   node scripts/fetch-transkun.mjs            download/verify (warns and exits 0 when offline)
 //   node scripts/fetch-transkun.mjs --strict   exit 1 if the model is not installed afterwards
+//                                              (implied when CI=true or VERCEL=1)
 //   node scripts/fetch-transkun.mjs --from DIR copy transkun.onnx + transkun-heads.onnx from DIR
 //                                              (e.g. the output of export_onnx.py; not hash-checked)
 // TRANSKUN_SKIP=1 skips it (the app then reports that the high-precision model is not installed).
@@ -64,7 +65,8 @@ SOFTWARE.
 const root = join(import.meta.dirname, '..');
 const dst = join(root, 'public/models/transkun');
 const args = process.argv.slice(2);
-const strict = args.includes('--strict');
+// Strict in CI and on Vercel builds: a deploy must not ship silently without the model.
+const strict = args.includes('--strict') || process.env.CI === 'true' || process.env.VERCEL === '1';
 const fromIdx = args.indexOf('--from');
 const from = fromIdx >= 0 ? args[fromIdx + 1] : undefined;
 

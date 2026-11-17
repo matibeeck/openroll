@@ -22,6 +22,7 @@ test('example piece, space bar, repeat section and responsive interactions', asy
   await page.getByTestId('demo').click();
   await expect(page.getByTestId('score-title')).toHaveText('Ode to Joy (Beethoven)');
   await page.waitForTimeout(800); // idle piano warm-up
+  await settledScreenshot(page, 'docs/screenshots/example-practice.png');
 
   // Space bar plays and pauses.
   await page.locator('body').click({ position: { x: 5, y: 5 } });
@@ -53,7 +54,10 @@ test('example piece, space bar, repeat section and responsive interactions', asy
   // Tabs, speed and settings.
   for (const tab of ['Sheet', 'Video', 'Download', 'Practice']) {
     await page.getByRole('tab', { name: tab }).click();
-    if (tab === 'Sheet') await expect(page.getByTestId('sheet').locator('svg').first()).toBeVisible({ timeout: 30_000 });
+    if (tab === 'Sheet') {
+      await expect(page.getByTestId('sheet').locator('svg').first()).toBeVisible({ timeout: 30_000 });
+      await settledScreenshot(page, 'docs/screenshots/example-sheet.png', { fullPage: true });
+    }
     if (tab === 'Video') await expect(page.getByTestId('video-live-preview')).toBeVisible();
   }
   await page.getByLabel('Speed').fill('0.5');

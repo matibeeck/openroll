@@ -21,6 +21,7 @@ Every input converts to ONE canonical `Score`; every output reads from `Score`. 
 - `@tonejs/midi` for MIDI I/O · `tone` for audio, with Salamander Grand Piano samples (CC-BY 3.0, credited in CREDITS.md) served from `public/`.
 - `verovio` (WASM) for MusicXML → MIDI and notation rendering. LGPL-3.0: keep it an unmodified, separately loaded module.
 - `@spotify/basic-pitch` (Apache-2.0) for audio → notes, inside a worker. Model files served from `public/`, never from a CDN at runtime.
+- Transkun (MIT) on `onnxruntime-web` (MIT) for the opt-in high-precision piano mode. Its ~57 MB model is never committed: `scripts/fetch-transkun.mjs` (postinstall/predev/prebuild) downloads it from Hugging Face at a pinned revision, checks SHA-256 and puts it in `public/models/transkun/` (gitignored), so the app still serves it from its own origin. The fetch is strict (fails the build) when `CI=true` or `VERCEL=1`. Large binaries never go in git.
 - Plain canvas pixel sampling for falling-notes video → notes (OpenCV.js only if truly needed).
 - Web MIDI API with a computer-keyboard fallback (Safari/iOS have no Web MIDI).
 - Vitest (unit + round-trip) · Playwright (e2e, Chromium) · vite-plugin-pwa.
@@ -38,7 +39,7 @@ Every input converts to ONE canonical `Score`; every output reads from `Score`. 
 - Forbidden: copying GPL code into the repo; non-commercial weights (e.g. MuScriptor, CC-BY-NC); Llama-licensed models (e.g. LEGATO OMR) in the app; anything paid, metered or needing an API key or account.
 - Check a dependency's license before installing it. The license audit in `npm run check` must fail on forbidden licenses.
 - Never use the trademark "Synthesia" in names, UI branding or logos. Descriptive use in docs is fine ("Synthesia-style videos").
-- Fixtures: generate your own note data. Never commit copyrighted recordings, scores or videos.
+- Fixtures: generate your own note data. Never commit copyrighted recordings, scores or videos, nor the owner's private recordings or anything derived from them (screenshots, MIDI, note lists); real-recording checks take the path from `REAL_RECORDING` and write their output to the OS temp folder.
 
 ## Quality bar
 
@@ -54,4 +55,4 @@ Every input converts to ONE canonical `Score`; every output reads from `Score`. 
 - If a user-level subagent that delegates to Codex CLI exists, use it for mechanical work (boilerplate, repetitive fixtures) to save tokens.
 - Commit after each milestone (Conventional Commits). Never push, add remotes or rewrite history.
 - Blocked after 3 genuinely different attempts → document what and why, then move on.
-- Docs: README.md in English plus README.es.md. The final report REPORTE.md is in Spanish.
+- Docs: README.md in English plus README.es.md. The report REPORTE.md is in Spanish and local only (gitignored, never committed); keep updating it on disk.
