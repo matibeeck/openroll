@@ -43,6 +43,8 @@ export interface Calibration {
   source: 'auto' | 'manual';
   /** Measured black-key centers (pitch → x), used instead of the generic layout when present. */
   blackCenters?: Record<number, number>;
+  /** How the automatic calibration was scored (auto only). */
+  quality?: CalibrationQuality;
 }
 
 /** What a person adjusts in the calibration dialog. */
@@ -290,6 +292,70 @@ function fitKeyRange(left: number, right: number, measured: number[]): Fit | nul
   return best && { low: best.low, high: best.high, score: best.score, standard: best.standard, blackCenters: best.blackCenters };
 }
 
+/** Why an automatic calibration is not trusted (shown by the dialog; any issue lowers confidence). */
+export type CalibrationIssue =
+  /** The visible keys repeat at another octave inside A0–C8 (cropped or 61-key keyboard): the octave is a guess. */
+  | 'octave-ambiguous'
+  /** Measured black keys sit far from where the fitted layout puts them (cut-off key, perspective, wrong range). */
+  | 'poor-fit'
+  /** Too few black keys were measured to trust the fit. */
+  | 'few-keys'
+  /** The best range is not a standard 88/76/61-key keyboard. */
+  | 'non-standard';
+
+export interface CalibrationQuality {
+  /** F-score of measured vs. predicted black-key centers. */
+  match: number;
+  /** RMS distance of matched black keys from the layout, in white-key widths. */
+  rms: number;
+  /** Matched black keys. */
+  blacks: number;
+  issues: CalibrationIssue[];
+}
+
+/** Octave shifts of [low, high] that still fit A0–C8 produce the same picture. */
+export function octaveAmbiguous(low: number, high: number): boolean {
+  return low - 12 >= 21 || high + 12 <= 108;
+}
+
+// Confidence model (see docs/DECISIONS.md, 2026-11-17 round 2). Values chosen on our renders.
+/** rms (white-key widths) up to which the fit counts as exact; it reaches 0 at RMS_OK + RMS_SPAN. */
+const RMS_OK = 0.06;
+const RMS_SPAN = 0.14;
+/** Black keys needed for full trust (a 61-key keyboard has 25, 88 keys 36). */
+const MIN_BLACKS = 15;
+/** Confidence cap when the octave cannot be known from the picture: always below CONFIDENCE_OK. */
+const AMBIGUOUS_CAP = 0.6;
+
+/** Confidence (0–1) of a fit, and the reasons it is lower than 1. */
+export function calibrationQuality(
+  left: number,
+  right: number,
+  fit: { low: number; high: number; score: number; standard: boolean; blackCenters: Record<number, number> },
+): CalibrationQuality & { confidence: number } {
+  const pred = new Map(blackLayoutCenters(left, right, fit.low, fit.high).map((k) => [k.pitch, k.x]));
+  const ww = (right - left) / Math.max(1, countWhite(fit.low, fit.high));
+  let sq = 0;
+  let blacks = 0;
+  for (const [pitch, x] of Object.entries(fit.blackCenters)) {
+    const px = pred.get(Number(pitch));
+    if (px === undefined) continue;
+    sq += ((x - px) / ww) ** 2;
+    blacks++;
+  }
+  const rms = blacks ? Math.sqrt(sq / blacks) : 1;
+  const geometry = Math.min(1, Math.max(0, 1 - (rms - RMS_OK) / RMS_SPAN));
+  const coverage = Math.min(1, blacks / MIN_BLACKS);
+  const issues: CalibrationIssue[] = [];
+  if (octaveAmbiguous(fit.low, fit.high)) issues.push('octave-ambiguous');
+  if (geometry < 1) issues.push('poor-fit');
+  if (coverage < 1) issues.push('few-keys');
+  if (!fit.standard) issues.push('non-standard');
+  let confidence = fit.score * (fit.standard ? 1 : 0.8) * geometry * coverage;
+  if (issues.includes('octave-ambiguous')) confidence = Math.min(confidence, AMBIGUOUS_CAP);
+  return { confidence, match: fit.score, rms, blacks, issues };
+}
+
 /** Automatic calibration from an idle (median) frame. Returns null if no keyboard was found. */
 export function autoCalibrate(frame: RgbaFrame): Calibration | null {
   const band = findKeyboardBand(frame);
@@ -299,15 +365,25 @@ export function autoCalibrate(frame: RgbaFrame): Calibration | null {
   const measured = measureBlackCenters(frame, band, ends.left, ends.right);
   const fit = fitKeyRange(ends.left, ends.right, measured);
   if (!fit) return null;
+  const { confidence, ...quality } = calibrationQuality(ends.left, ends.right, fit);
   return {
     ...ends,
     ...band,
     low: fit.low,
     high: fit.high,
-    confidence: fit.score * (fit.standard ? 1 : 0.8),
+    confidence,
     source: 'auto',
     blackCenters: fit.blackCenters,
+    quality,
   };
+}
+
+/**
+ * Whether the converter must open the calibration dialog: no keyboard found, an automatic
+ * calibration below CONFIDENCE_OK, or the user asked to recalibrate.
+ */
+export function needsCalibrationDialog(auto: Calibration | null, alwaysCalibrate = false): boolean {
+  return alwaysCalibrate || !auto || auto.confidence < CONFIDENCE_OK;
 }
 
 /** Highest key of a keyboard with `keys` keys starting at `lowest`. */

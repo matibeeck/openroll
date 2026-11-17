@@ -8,7 +8,7 @@
  */
 import { describe, expect, test } from 'vitest';
 import type { Score } from '../../src/core/score';
-import { CONFIDENCE_OK } from '../../src/converters/inputs/falling-notes-video/detect';
+import { CONFIDENCE_OK, octaveAmbiguous } from '../../src/converters/inputs/falling-notes-video/detect';
 import { fastRepeatsPiece, monophonicMelody, twoHandPiece } from '../fixtures/transcription-fixtures';
 import {
   detectFromRenders,
@@ -100,7 +100,12 @@ describe('falling-notes video → Score round trip', () => {
         );
         if (m.missed.length) report(`[falling-notes]   missed: ${m.missed.map((x) => `${x.pitch}@${x.start.toFixed(2)}`).join(' ')}`);
         if (m.extra.length) report(`[falling-notes]   extra:  ${m.extra.map((x) => `${x.pitch}@${x.start.toFixed(2)}`).join(' ')}`);
-        expect(cal.confidence).toBeGreaterThanOrEqual(CONFIDENCE_OK);
+        // A keyboard that also fits A0–C8 an octave away (61 keys) cannot be placed from pixels:
+        // the converter must ask (confidence below CONFIDENCE_OK); its standard-size guess, used
+        // here as if the user confirmed it, is still the right one for this render.
+        const ambiguous = octaveAmbiguous(v.render.low ?? 21, v.render.high ?? 108);
+        if (ambiguous) expect(cal.confidence).toBeLessThan(CONFIDENCE_OK);
+        else expect(cal.confidence).toBeGreaterThanOrEqual(CONFIDENCE_OK);
         expect(cal.low).toBe(v.render.low ?? 21);
         expect(cal.high).toBe(v.render.high ?? 108);
         expect(m.f1).toBeGreaterThanOrEqual(0.95);

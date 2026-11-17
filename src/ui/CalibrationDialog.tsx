@@ -6,7 +6,14 @@
  * Wiring: `const { dialog, calibrate } = useCalibrationPrompt();` render `{dialog}` and pass
  * `{ calibrate }` as the falling-notes-video converter options.
  */
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { isBlack, layoutKeyboard, noteName } from '../core/keyboard';
 import {
   highestKey,
@@ -24,7 +31,14 @@ const LOWEST_CHOICES = Array.from({ length: 60 - 21 + 1 }, (_, i) => 21 + i).fil
 
 function initialValues(frame: ImageData, auto: Calibration | null): ManualCalibration {
   if (!auto) {
-    return { left: 0, right: frame.width, top: Math.round(frame.height * 0.82), bottom: frame.height, keys: 88, lowest: 21 };
+    return {
+      left: 0,
+      right: frame.width,
+      top: Math.round(frame.height * 0.82),
+      bottom: frame.height,
+      keys: 88,
+      lowest: 21,
+    };
   }
   const n = auto.high - auto.low + 1;
   const keys: KeyCount = n >= 82 ? 88 : n >= 68 ? 76 : 61;
@@ -191,7 +205,12 @@ export function CalibrationDialog({ frame, auto, onDone, onCancel }: Calibration
           <button type="button" onClick={onCancel}>
             {t('calibrate.cancel')}
           </button>
-          <button type="button" className="primary" onClick={() => onDone({ ...v, lowest })} data-testid="calibrate-ok">
+          <button
+            type="button"
+            className="primary"
+            onClick={() => onDone({ ...v, lowest })}
+            data-testid="calibrate-ok"
+          >
             {t('calibrate.ok')}
           </button>
         </div>
@@ -211,7 +230,8 @@ interface Pending {
 export function useCalibrationPrompt(): { dialog: ReactNode; calibrate: CalibratePrompt } {
   const [pending, setPending] = useState<Pending | null>(null);
   const calibrate = useCallback<CalibratePrompt>(
-    (frame, auto) => new Promise<ManualCalibration>((resolve, reject) => setPending({ frame, auto, resolve, reject })),
+    (frame, auto) =>
+      new Promise<ManualCalibration>((resolve, reject) => setPending({ frame, auto, resolve, reject })),
     [],
   );
   const dialog = pending ? (

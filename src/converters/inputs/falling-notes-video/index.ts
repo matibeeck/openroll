@@ -4,7 +4,7 @@
  */
 import type { Score } from '../../../core/score';
 import type { InputConverter, ProgressFn } from '../../types';
-import { CONFIDENCE_OK, notesToScore, type Calibration, type DetectOptions, type ManualCalibration, type RgbaFrame } from './detect';
+import { needsCalibrationDialog, notesToScore, type Calibration, type DetectOptions, type ManualCalibration, type RgbaFrame } from './detect';
 import type { FallingNotesRequest, FallingNotesResponse } from './protocol';
 import { FallingNotesError, VideoFrameSource } from './video-frames';
 
@@ -13,7 +13,10 @@ export {
   CONFIDENCE_OK,
   STANDARD_LOWEST,
   highestKey,
+  needsCalibrationDialog,
   type Calibration,
+  type CalibrationIssue,
+  type CalibrationQuality,
   type KeyCount,
   type ManualCalibration,
 } from './detect';
@@ -26,7 +29,11 @@ export {
 export type CalibratePrompt = (frame: ImageData, auto: Calibration | null) => Promise<ManualCalibration>;
 
 export interface FallingNotesOptions {
-  /** Manual calibration UI. Called when auto calibration is unsure, or always with `alwaysCalibrate`. */
+  /**
+   * Manual calibration UI. Called by the converter itself when no keyboard was found or the
+   * automatic calibration's confidence is below CONFIDENCE_OK (cropped or 61-key keyboards whose
+   * octave is ambiguous, cut-off keys, poor fits), or always with `alwaysCalibrate`.
+   */
   calibrate?: CalibratePrompt;
   alwaysCalibrate?: boolean;
   /** Skip the dialog with known values (e.g. from a previous run). */
@@ -86,6 +93,21 @@ function titleFromFileName(name: string): string {
   return name.replace(/\.[^./\\]+$/, '').trim() || 'Falling-notes video';
 }
 
+/**
+ * The converter's calibration decision: explicit `manual` values win; otherwise the dialog is
+ * opened (by the converter itself) when needsCalibrationDialog says so. Returns the manual
+ * calibration to use, or undefined to keep the automatic one. `idle` builds the dialog's frame.
+ */
+export async function confirmCalibration(
+  auto: Calibration | null,
+  idle: () => ImageData,
+  opts: Pick<FallingNotesOptions, 'calibrate' | 'alwaysCalibrate' | 'manual'>,
+): Promise<ManualCalibration | undefined> {
+  if (opts.manual) return opts.manual;
+  if (opts.calibrate && needsCalibrationDialog(auto, opts.alwaysCalibrate)) return opts.calibrate(idle(), auto);
+  return undefined;
+}
+
 function toImageData(f: RgbaFrame): ImageData {
   return new ImageData(new Uint8ClampedArray(f.data), f.width, f.height);
 }
@@ -114,11 +136,7 @@ export async function transcribeFallingNotesVideo(
     );
     if (cal.type !== 'calibrated') throw new Error('unexpected worker reply');
 
-    let manual = opts.manual;
-    const unsure = !cal.auto || cal.auto.confidence < CONFIDENCE_OK;
-    if (!manual && opts.calibrate && (unsure || opts.alwaysCalibrate)) {
-      manual = await opts.calibrate(toImageData(cal.idle), cal.auto);
-    }
+    const manual = await confirmCalibration(cal.auto, () => toImageData(cal.idle), opts);
     if (signal.aborted) throw abortError();
     if (!manual && !cal.auto) {
       throw new FallingNotesError(
