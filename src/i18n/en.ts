@@ -68,6 +68,8 @@ export const en = {
   'sheet.tap': 'Tap tempo',
   'sheet.timeSig': 'Time signature',
   'sheet.error': 'Could not render the sheet: {msg}',
+  'sheet.freeHint': 'This piece has no fixed beat (e.g. a recording). Set the tempo and time signature so the bars line up.',
+  'sheet.dropped': '{count} very short notes were left out of the sheet.',
   'download.midi': 'Download MIDI',
   'download.musicxml': 'Download MusicXML',
   'download.hint': 'Files are generated on your device.',

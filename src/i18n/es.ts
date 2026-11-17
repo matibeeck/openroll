@@ -70,6 +70,8 @@ export const es: Messages = {
   'sheet.tap': 'Marcar tempo',
   'sheet.timeSig': 'Compás',
   'sheet.error': 'No se pudo generar la partitura: {msg}',
+  'sheet.freeHint': 'Esta pieza no tiene un pulso fijo (por ejemplo, una grabación). Ajusta el tempo y el compás para que cuadren los compases.',
+  'sheet.dropped': 'Se omitieron {count} notas muy cortas en la partitura.',
   'download.midi': 'Descargar MIDI',
   'download.musicxml': 'Descargar MusicXML',
   'download.hint': 'Los archivos se generan en tu dispositivo.',

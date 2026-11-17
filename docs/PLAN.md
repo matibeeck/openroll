@@ -54,9 +54,9 @@ Accept: F1 ≥ 0.85 monophonic, ≥ 0.70 two-hand. If missed, record the numbers
 Accept: F1 ≥ 0.95 on generated frames; manual calibration works.
 
 ## M6 — Score → sheet music
-- [ ] Quantization: tempo from the file or user BPM + tap tempo; time signature; 1/16 grid; drop micro-notes; keep chords together.
-- [ ] Two-staff piano MusicXML writer: rests, ties across barlines, chords, key signature (estimated from pitch histogram), title.
-- [ ] Render with Verovio (SVG), page navigation, zoom; download MusicXML and MIDI.
+- [x] Quantization: tempo from the file or user BPM + tap tempo; time signature; 1/16 grid; drop micro-notes; keep chords together.
+- [x] Two-staff piano MusicXML writer: rests, ties across barlines, chords, key signature (estimated from pitch histogram), title.
+- [x] Render with Verovio (SVG), page navigation, zoom; download MusicXML and MIDI.
 
 Accept: quantization tests on known sequences; output loads in Verovio without errors; MusicXML → Score → MusicXML preserves pitches/onsets for the fixtures.
 
