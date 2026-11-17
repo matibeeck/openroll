@@ -23,11 +23,11 @@ Accept: `npm run check` and `npm run build` pass on the empty app.
 Accept: MIDI → Score → MIDI identical within 1 ms; MusicXML → Score matches the fixture's pitch/onset sequence.
 
 ## M2 — Practice mode
-- [ ] Canvas renderer: 88-key keyboard, falling notes colored by hand, octave guides, note-name labels toggle (C D E / Do Re Mi).
-- [ ] Transport: play/pause, seek, speed 25–150% without pitch change, A-B loop, hands selector (L / R / both).
-- [ ] Audio with tone + Salamander samples (fallback: Tone.PolySynth).
-- [ ] Web MIDI input: pressed keys highlighted, wait mode (pauses until the right notes are played), score (hits, misses, accuracy %).
-- [ ] No-MIDI fallback: computer keyboard + on-screen keys; clear notice on Safari.
+- [x] Canvas renderer: 88-key keyboard, falling notes colored by hand, octave guides, note-name labels toggle (C D E / Do Re Mi).
+- [x] Transport: play/pause, seek, speed 25–150% without pitch change, A-B loop, hands selector (L / R / both).
+- [x] Audio with tone + Salamander samples (fallback: Tone.PolySynth).
+- [x] Web MIDI input: pressed keys highlighted, wait mode (pauses until the right notes are played), score (hits, misses, accuracy %).
+- [x] No-MIDI fallback: computer keyboard + on-screen keys; clear notice on Safari.
 
 Accept: wait-mode and scoring logic unit-tested with simulated MIDI events; smooth playback of a 5-minute piece (record measured fps in REPORTE.md).
 

@@ -1,2 +1,218 @@
-:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #111827; color: #f9fafb; }
-body { margin: 0; }
+:root {
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  --bg: #0b1120;
+  --panel: #111827;
+  --line: #1f2937;
+  --text: #f9fafb;
+  --muted: #9ca3af;
+  --accent: #22c55e;
+  --accent2: #3b82f6;
+  --error: #f87171;
+  background: var(--bg);
+  color: var(--text);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.brand h1 {
+  font-size: 1.3rem;
+  margin: 0;
+}
+.tagline {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.lang {
+  margin-left: auto;
+}
+main {
+  flex: 1;
+  padding: 16px 0;
+}
+footer {
+  color: var(--muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+  text-align: center;
+}
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 2px dashed var(--line);
+  border-radius: 16px;
+  margin: 24px 0;
+  padding: 48px 16px;
+  text-align: center;
+  min-height: 50vh;
+}
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: #0f1f17;
+}
+.dropzone h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.formats {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 640px;
+}
+button,
+.button,
+select,
+input[type='color'] {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button:hover,
+.button:hover {
+  border-color: var(--muted);
+}
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #052e16;
+  font-weight: 600;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+.controls.center {
+  justify-content: center;
+}
+.controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.grow {
+  flex: 1;
+  min-width: 160px;
+}
+.grow input {
+  width: 100%;
+}
+.time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.practice-canvas {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.practice-canvas canvas {
+  display: block;
+  width: 100%;
+  touch-action: none;
+}
+.stats {
+  font-variant-numeric: tabular-nums;
+}
+.notice {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.notice.error,
+.error {
+  color: var(--error);
+}
+.result-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.result-head h2 {
+  margin: 0;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin: 12px 0;
+}
+.tabs button {
+  border-radius: 8px 8px 0 0;
+  border-bottom: 0;
+}
+.tabs button.active {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+.video-result video {
+  width: 100%;
+  max-height: 60vh;
+  background: #000;
+  border-radius: 8px;
+}
+.sheet-pages {
+  background: #fff;
+  border-radius: 8px;
+  overflow: auto;
+}
+.sheet-pages svg {
+  display: block;
+  margin: 0 auto;
+}
+progress {
+  width: min(480px, 100%);
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
