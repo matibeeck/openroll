@@ -6,8 +6,8 @@ import { createScore, type Note, type Score } from './score';
 import { assignHands } from './hands';
 
 const BEAT = 0.6; // 100 BPM
-// Right hand: [pitch, beats]. Two 4-bar phrases, repeated with the second ending.
-const PHRASE = [64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64];
+// Right hand as [pitch, beats], 16 bars in four 4-bar phrases: A, A (second ending), B, A.
+const PHRASE: [number, number][] = [64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64].map((p) => [p, 1]);
 const END_A: [number, number][] = [
   [64, 1.5],
   [62, 0.5],
@@ -18,24 +18,37 @@ const END_B: [number, number][] = [
   [60, 0.5],
   [60, 2],
 ];
-// Left hand: one chord root per bar (half notes).
-const BASS_A = [48, 43, 48, 43, 48, 43, 48, 43];
-const BASS_B = [48, 43, 48, 43, 48, 43, 43, 48];
+const BRIDGE: [number, number][] = [
+  [62, 1],
+  [62, 1],
+  [64, 1],
+  [60, 1],
+  [62, 1],
+  [64, 0.5],
+  [65, 0.5],
+  [64, 1],
+  [60, 1],
+  [62, 1],
+  [64, 0.5],
+  [65, 0.5],
+  [64, 1],
+  [62, 1],
+  [60, 1],
+  [62, 1],
+  [55, 2],
+];
+const MELODY = [...PHRASE, ...END_A, ...PHRASE, ...END_B, ...BRIDGE, ...PHRASE, ...END_B];
+// Left hand: one bass note per bar, played as two half notes.
+const BASS = [48, 43, 48, 43, 48, 43, 48, 48, 43, 48, 43, 43, 48, 43, 48, 48];
 
 export function demoScore(): Score {
   const notes: Note[] = [];
   let t = 0;
-  for (const ending of [END_A, END_B]) {
-    for (const p of PHRASE) {
-      notes.push({ pitch: p, start: t, duration: BEAT * 0.95, velocity: 0.75, hand: 'R', track: 0 });
-      t += BEAT;
-    }
-    for (const [p, beats] of ending) {
-      notes.push({ pitch: p, start: t, duration: BEAT * beats * 0.95, velocity: 0.75, hand: 'R', track: 0 });
-      t += BEAT * beats;
-    }
+  for (const [p, beats] of MELODY) {
+    notes.push({ pitch: p, start: t, duration: BEAT * beats * 0.95, velocity: 0.75, hand: 'R', track: 0 });
+    t += BEAT * beats;
   }
-  [...BASS_A, ...BASS_B].forEach((p, i) => {
+  BASS.forEach((p, i) => {
     for (const half of [0, 1]) {
       notes.push({
         pitch: p,
