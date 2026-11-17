@@ -93,6 +93,7 @@ export const en = {
   'calibrate.lowest': 'Lowest key',
   'calibrate.ok': 'Use this keyboard',
   'calibrate.cancel': 'Cancel',
+  'home.recalibrate': 'Recalibrate keyboard',
 } as const;
 
 export type Messages = Record<keyof typeof en, string>;

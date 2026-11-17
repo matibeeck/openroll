@@ -62,4 +62,11 @@ test('falling-notes video: M3 WebM export → recognizer → practice view', asy
   expect(estimate.length).toBe(count);
   expect(Math.abs(count - reference.length)).toBeLessThanOrEqual(Math.ceil(reference.length * 0.1));
   expect(m.f1).toBeGreaterThanOrEqual(0.95);
+
+  // 4. Manual calibration from the result screen: the dialog opens with the auto values; accepting them gives the same notes.
+  await page.getByRole('button', { name: 'Recalibrate keyboard' }).click();
+  await expect(page.getByTestId('calibration-dialog')).toBeVisible({ timeout: 60_000 });
+  await page.screenshot({ path: 'docs/screenshots/calibration.png' });
+  await page.getByTestId('calibrate-ok').click();
+  await expect(page.getByTestId('score-summary')).toContainText(`${count} notes`, { timeout: 180_000 });
 });

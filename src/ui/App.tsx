@@ -4,6 +4,8 @@ import { scoreDuration } from '../core/score';
 import { converterIdFor, detectKind } from '../converters/detect';
 import { findInputConverter } from '../converters/registry';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
+import { en, type Messages } from '../i18n/en';
+import { useCalibrationPrompt } from './CalibrationDialog';
 import { PracticeView } from './PracticeView';
 import { VideoView } from './VideoView';
 import { defaultSheetSettings, type SheetSettings } from './sheetSettings';
@@ -17,7 +19,15 @@ type State =
   | { kind: 'home'; error?: string }
   | { kind: 'ask-video'; file: File }
   | { kind: 'converting'; file: File; progress: number; label?: string }
-  | { kind: 'result'; score: Score; name: string; id: number; sheet: SheetSettings };
+  | {
+      kind: 'result';
+      score: Score;
+      name: string;
+      id: number;
+      sheet: SheetSettings;
+      file: File;
+      videoMode?: 'falling-notes' | 'performance';
+    };
 
 function fmtDuration(s: number): string {
   const total = Math.round(s);
@@ -31,8 +41,9 @@ function Shell() {
   const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const idRef = useRef(0);
+  const { dialog, calibrate } = useCalibrationPrompt();
 
-  const convert = async (file: File, videoMode?: 'falling-notes' | 'performance') => {
+  const convert = async (file: File, videoMode?: 'falling-notes' | 'performance', recalibrate = false) => {
     const kind = detectKind(file.name, file.type);
     if (kind === 'unknown') return setState({ kind: 'home', error: t('home.unknown', { name: file.name }) });
     if (kind === 'video' && !videoMode) return setState({ kind: 'ask-video', file });
@@ -43,9 +54,10 @@ function Shell() {
     abortRef.current = ac;
     setState({ kind: 'converting', file, progress: 0 });
     try {
+      const opts = id === 'falling-notes-video' ? { calibrate, alwaysCalibrate: recalibrate } : {};
       const score = await conv.convert(
         file,
-        {},
+        opts,
         (progress, label) => setState({ kind: 'converting', file, progress, label }),
         ac.signal,
       );
@@ -56,10 +68,18 @@ function Shell() {
         name: file.name,
         id: ++idRef.current,
         sheet: defaultSheetSettings(score),
+        file,
+        videoMode,
       });
     } catch (e) {
       if ((e as Error).name === 'AbortError') setState({ kind: 'home' });
-      else setState({ kind: 'home', error: t('home.error', { name: file.name, msg: (e as Error).message }) });
+      else {
+        // Converters attach a stable `code` to user-facing errors; translate it when we know it.
+        const code = (e as { code?: string }).code;
+        const key = `error.${code}` as keyof Messages;
+        const msg = code && key in en ? t(key, { name: file.name }) : (e as Error).message;
+        setState({ kind: 'home', error: t('home.error', { name: file.name, msg }) });
+      }
     } finally {
       abortRef.current = null;
     }
@@ -162,6 +182,11 @@ function Shell() {
                 duration: fmtDuration(scoreDuration(state.score)),
               })}
             </span>
+            {state.videoMode === 'falling-notes' && (
+              <button type="button" onClick={() => void convert(state.file, 'falling-notes', true)}>
+                {t('home.recalibrate')}
+              </button>
+            )}
             <button type="button" onClick={() => setState({ kind: 'home' })}>
               {t('home.back')}
             </button>
@@ -196,6 +221,7 @@ function Shell() {
         </main>
       )}
 
+      {dialog}
       <footer>
         <p>{t('privacy.notice')}</p>
       </footer>

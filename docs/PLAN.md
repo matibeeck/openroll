@@ -61,10 +61,10 @@ Accept: F1 ≥ 0.95 on generated frames; manual calibration works.
 Accept: quantization tests on known sequences; output loads in Verovio without errors; MusicXML → Score → MusicXML preserves pitches/onsets for the fixtures.
 
 ## M7 — Hub UI
-- [ ] Home: one drop zone ("Drop anything: MIDI, MusicXML, audio, video") + file picker; auto-detect type; for videos ask "Falling-notes video or real performance?".
-- [ ] Result screen tabs: Practice · Sheet · Video · Download.
-- [ ] i18n English + Spanish; "everything stays on your device" notice.
-- [ ] PWA: installable, works offline after the first load.
+- [x] Home: one drop zone ("Drop anything: MIDI, MusicXML, audio, video") + file picker; auto-detect type; for videos ask "Falling-notes video or real performance?".
+- [x] Result screen tabs: Practice · Sheet · Video · Download.
+- [x] i18n English + Spanish; "everything stays on your device" notice.
+- [x] PWA: installable, works offline after the first load.
 
 Accept: Playwright e2e for each flow (MIDI → practice, MusicXML → sheet, audio → MIDI download, falling-notes video → practice, video export), with screenshots in docs/screenshots/.
 

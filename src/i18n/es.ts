@@ -95,4 +95,5 @@ export const es: Messages = {
   'calibrate.lowest': 'Tecla más grave',
   'calibrate.ok': 'Usar este teclado',
   'calibrate.cancel': 'Cancelar',
+  'home.recalibrate': 'Recalibrar teclado',
 };
