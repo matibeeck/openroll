@@ -32,8 +32,8 @@ Accept: MIDI → Score → MIDI identical within 1 ms; MusicXML → Score matche
 Accept: wait-mode and scoring logic unit-tested with simulated MIDI events; smooth playback of a 5-minute piece (record measured fps in REPORTE.md).
 
 ## M3 — Falling-notes video export
-- [ ] Pure, deterministic `renderFrame(score, t, options)` (M5 reuses it to generate test videos).
-- [ ] Export 720p/1080p at 30/60 fps with audio to WebM (canvas.captureStream + MediaRecorder + MediaStreamDestination). Options: dark/light theme, labels, hand colors.
+- [x] Pure, deterministic `renderFrame(score, t, options)` (M5 reuses it to generate test videos).
+- [x] Export 720p/1080p at 30/60 fps with audio to WebM (canvas.captureStream + MediaRecorder + MediaStreamDestination). Options: dark/light theme, labels, hand colors.
 
 Accept: e2e exports a 10-second clip; it plays and its duration is within ±0.2 s.
 

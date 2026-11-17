@@ -5,6 +5,7 @@ import { converterIdFor, detectKind } from '../converters/detect';
 import { findInputConverter } from '../converters/registry';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import { PracticeView } from './PracticeView';
+import { VideoView } from './VideoView';
 
 // Sheet music pulls in Verovio (LGPL, WASM): keep it in a separately loaded chunk.
 const SheetView = lazy(() => import('./SheetView'));
@@ -159,7 +160,7 @@ function Shell() {
             </button>
           </div>
           <nav className="tabs" role="tablist">
-            {(['practice', 'sheet', 'download'] as Tab[]).map((k) => (
+            {(['practice', 'sheet', 'video', 'download'] as Tab[]).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -175,6 +176,7 @@ function Shell() {
           <Suspense fallback={<p>{t('sheet.loading')}</p>}>
             {tab === 'practice' && <PracticeView key={state.id} score={state.score} />}
             {tab === 'sheet' && <SheetView key={state.id} score={state.score} />}
+            {tab === 'video' && <VideoView key={state.id} score={state.score} />}
             {tab === 'download' && <DownloadView key={state.id} score={state.score} />}
           </Suspense>
         </main>
