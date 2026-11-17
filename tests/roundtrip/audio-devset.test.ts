@@ -14,8 +14,8 @@ import { loadBasicPitchModelNode } from './basic-pitch-node';
 import { formatMetrics, noteF1, report } from './metrics';
 import { synthesizeScore } from './synth';
 
-/** F1 recorded in docs/DECISIONS.md for DEFAULT_POSTPROCESS on this dev set. */
-const DOCUMENTED = { monophonic: 1.0, 'two-hand': 0.981 } as const;
+/** F1 recorded in docs/DECISIONS.md for the defaults on this dev set (round 2: 98.1 → 98.8 two-hand). */
+const DOCUMENTED = { monophonic: 1.0, 'two-hand': 0.988 } as const;
 /** Allowed drift before this test calls it a regression (platform float differences, etc.). */
 const DRIFT = 0.02;
 

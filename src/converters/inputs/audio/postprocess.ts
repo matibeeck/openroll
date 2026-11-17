@@ -39,6 +39,12 @@ export interface PostprocessOptions {
   ghostMaxOnset: number;
   /** ...and whose amplitude is below this fraction of the lower note's amplitude. */
   ghostAmplitudeRatio: number;
+  /**
+   * ...and whose onset is below this fraction of the lower note's onset. A real octave (or
+   * twelfth) is struck and has an onset of its own about as strong as the lower note's; an
+   * overtone's onset is weaker. Infinity disables the check (the M4 rule).
+   */
+  ghostOnsetRatio: number;
   /** Events with an onset activation below this are dropped (0 disables). */
   minOnset: number;
   /** Velocity range the amplitudes are mapped into (0–1). */
@@ -50,11 +56,13 @@ export interface PostprocessOptions {
 }
 
 export const DEFAULT_POSTPROCESS: PostprocessOptions = {
-  minDuration: 0.05,
+  // 0.08 (was 0.05): chosen with DEFAULT_DECODE_PARAMS on the recording-like tuning set.
+  minDuration: 0.08,
   mergeGap: 0.05,
   reattackOnset: 0.8,
   ghostMaxOnset: 0.85,
   ghostAmplitudeRatio: 0.6,
+  ghostOnsetRatio: Infinity,
   minOnset: 0.6,
   minVelocity: 0.35,
   maxVelocity: 1.0,
@@ -110,9 +118,15 @@ export function mergeFragments(events: RawNoteEvent[], maxGap: number, reattackO
 
 /**
  * Drops overtone ghosts: an event with a weak onset whose pitch is 12, 19 or 24 semitones above
- * a louder note that is sounding when it starts. Events without onset information are kept.
+ * a louder note that is sounding when it starts, and (with `onsetRatio`) whose onset is clearly
+ * weaker than that note's. Events without onset information are kept.
  */
-export function dropHarmonicGhosts(events: RawNoteEvent[], maxOnset: number, amplitudeRatio: number): RawNoteEvent[] {
+export function dropHarmonicGhosts(
+  events: RawNoteEvent[],
+  maxOnset: number,
+  amplitudeRatio: number,
+  onsetRatio = Infinity,
+): RawNoteEvent[] {
   return events.filter((e) => {
     if (e.onsetStrength === undefined || e.onsetStrength >= maxOnset) return true;
     const isGhost = events.some(
@@ -121,7 +135,8 @@ export function dropHarmonicGhosts(events: RawNoteEvent[], maxOnset: number, amp
         OVERTONE_INTERVALS.includes(e.pitch - m.pitch) &&
         m.start <= e.start + 0.05 &&
         end(m) >= e.start &&
-        e.amplitude < m.amplitude * amplitudeRatio,
+        e.amplitude < m.amplitude * amplitudeRatio &&
+        (onsetRatio === Infinity || m.onsetStrength === undefined || e.onsetStrength! < m.onsetStrength * onsetRatio),
     );
     return !isGhost;
   });
@@ -148,7 +163,7 @@ export function cleanEvents(events: RawNoteEvent[], opts: Partial<PostprocessOpt
     .map((e) => ({ ...e, start: Math.max(0, e.start), pitch: Math.round(e.pitch) }))
     .filter((e) => e.pitch >= MIN_PITCH && e.pitch <= MAX_PITCH);
   const merged = mergeFragments(valid, o.mergeGap, o.reattackOnset);
-  const noGhosts = dropHarmonicGhosts(merged, o.ghostMaxOnset, o.ghostAmplitudeRatio);
+  const noGhosts = dropHarmonicGhosts(merged, o.ghostMaxOnset, o.ghostAmplitudeRatio, o.ghostOnsetRatio);
   return noGhosts
     .filter((e) => e.onsetStrength === undefined || e.onsetStrength >= o.minOnset)
     .filter((e) => e.duration >= o.minDuration);

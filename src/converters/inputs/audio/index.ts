@@ -3,6 +3,7 @@ import { transcribeMediaFile, type AudioConvertOptions } from './pipeline';
 
 export { AudioDecodeError, type AudioDecodeErrorCode } from './decode';
 export type { AudioConvertOptions } from './pipeline';
+export { prewarmAudioTranscriber } from './transcriber';
 
 /** Audio recording → Score via Basic Pitch (in a Web Worker) and post-processing. */
 export const audioInput: InputConverter<AudioConvertOptions> = {

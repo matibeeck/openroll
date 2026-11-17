@@ -3,6 +3,7 @@ import type { Score } from '../core/score';
 import { scoreDuration } from '../core/score';
 import { converterIdFor, detectKind } from '../converters/detect';
 import { demoScore } from '../core/demo';
+import { prewarmAudioTranscriber } from '../converters/inputs/audio';
 import { findInputConverter } from '../converters/registry';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import { en, type Messages } from '../i18n/en';
@@ -47,6 +48,8 @@ function Shell() {
   const convert = async (file: File, videoMode?: 'falling-notes' | 'performance', recalibrate = false) => {
     const kind = detectKind(file.name, file.type);
     if (kind === 'unknown') return setState({ kind: 'home', error: t('home.unknown', { name: file.name }) });
+    // Start loading the note model while the file is decoded (or while the user answers the video question).
+    if (kind === 'audio' || (kind === 'video' && videoMode !== 'falling-notes')) prewarmAudioTranscriber();
     if (kind === 'video' && !videoMode) return setState({ kind: 'ask-video', file });
     const id = converterIdFor(kind, videoMode);
     const conv = id ? findInputConverter(id) : undefined;

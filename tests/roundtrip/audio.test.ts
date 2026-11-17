@@ -10,7 +10,9 @@
  * re-tunable with `npm run tune:audio`.
  */
 import { beforeAll, describe, expect, test } from 'vitest';
+import * as tf from '@tensorflow/tfjs';
 import type { GraphModel } from '@tensorflow/tfjs';
+import { BasicPitch, outputToNotesPoly } from '@spotify/basic-pitch';
 import type { Score } from '../../src/core/score';
 import {
   BASIC_PITCH_SAMPLE_RATE,
@@ -18,6 +20,8 @@ import {
   runModel,
   TranscriptionCancelled,
 } from '../../src/converters/inputs/audio/basic-pitch-run';
+import { modelWindows } from '../../src/converters/inputs/audio/mono';
+import { outputToNotesPolyFast } from '../../src/converters/inputs/audio/note-decoder';
 import { postprocess } from '../../src/converters/inputs/audio/postprocess';
 import { monophonicMelody, twoHandPiece } from '../fixtures/transcription-fixtures';
 import { loadBasicPitchModelNode, modelJsonPath } from './basic-pitch-node';
@@ -108,5 +112,41 @@ describe('audio → Score round trip (Basic Pitch)', () => {
       runModel(model, audio, () => windows++, () => windows >= 2),
     ).rejects.toBeInstanceOf(TranscriptionCancelled);
     expect(windows).toBe(2);
+  });
+
+  test('ported window loop and note decoder match @spotify/basic-pitch exactly (faster, same output)', async () => {
+    const full = synthesizeScore(twoHandPiece(), { seed: 2 });
+    // Edge lengths: shorter than a window, exactly at the first window boundary and one past it, several windows.
+    for (const len of [1000, 32324, 32325, 5 * 22050 + 123]) {
+      const audio = full.slice(0, len);
+      const ref = { frames: [] as number[][], onsets: [] as number[][] };
+      let callbacks = 0;
+      tf.engine().startScope();
+      try {
+        await new BasicPitch(Promise.resolve(model)).evaluateModel(
+          audio,
+          (f, o) => {
+            ref.frames.push(...f);
+            ref.onsets.push(...o);
+          },
+          () => callbacks++,
+        );
+      } finally {
+        tf.engine().endScope();
+      }
+      const out = await runModel(model, audio);
+      expect(out.frames).toEqual(ref.frames);
+      expect(out.onsets).toEqual(ref.onsets);
+      expect(modelWindows(len)).toBe(callbacks - 1);
+    }
+    // Decoder on a full two-hand piece (onset notes + melodia notes).
+    const out = await runModel(model, full);
+    const t0 = performance.now();
+    const original = outputToNotesPoly(out.frames.map((r) => r.slice()), out.onsets.map((r) => r.slice()), 0.5, 0.3, 5, true, null, null, true);
+    const t1 = performance.now();
+    const fast = outputToNotesPolyFast(out.frames, out.onsets, 0.5, 0.3, 5, true, true);
+    const t2 = performance.now();
+    report(`[audio] note decoder on ${(full.length / 22050).toFixed(1)} s: original ${(t1 - t0).toFixed(0)} ms, port ${(t2 - t1).toFixed(0)} ms, ${fast.length} events`);
+    expect(fast).toEqual(original);
   });
 });
