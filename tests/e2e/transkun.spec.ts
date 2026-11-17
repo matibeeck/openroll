@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { createScore, type Note } from '../../src/core/score';
 import { formatMetrics, noteF1 } from '../roundtrip/metrics';
 import { synthesizeScore } from '../roundtrip/synth';
-import { openFile, writeTemp } from './helpers';
+import { openFile, settledScreenshot, writeTemp } from './helpers';
 
 const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi');
 
@@ -45,7 +45,7 @@ test('audio → high-precision (piano) mode → notes', async ({ page }) => {
   await openFile(page, writeTemp('piano-scale.wav', pianoWav(notes)));
   await expect(page.getByTestId('mode-precise')).toBeVisible();
   await expect(page.getByTestId('mode-precise')).toContainText(/MB download the first time|already downloaded/);
-  await page.screenshot({ path: 'docs/screenshots/mode-choice.png' });
+  await settledScreenshot(page, 'docs/screenshots/mode-choice.png');
   await page.getByTestId('mode-precise').click();
   // The progress screen shows a stage (download, model loading or listening) and an estimate.
   await expect(page.getByTestId('convert-status')).toBeVisible();
