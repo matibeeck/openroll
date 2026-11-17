@@ -38,10 +38,10 @@ Accept: wait-mode and scoring logic unit-tested with simulated MIDI events; smoo
 Accept: e2e exports a 10-second clip; it plays and its duration is within ±0.2 s.
 
 ## M4 — Audio / performance video → notes
-- [ ] Inputs: mp3, wav, ogg, flac, m4a, mp4, webm, mov; decode audio with decodeAudioData; clear error when the browser can't.
-- [ ] Basic Pitch in a Web Worker (22,050 Hz mono), progress + cancel.
-- [ ] Post-processing: min note length, merge fragments, velocity, hand assignment (M1).
-- [ ] Round-trip test: synthesize audio from fixture Scores (OfflineAudioContext or a simple piano-like synth) → transcribe → note F1 (pitch exact, onset ±50 ms).
+- [x] Inputs: mp3, wav, ogg, flac, m4a, mp4, webm, mov; decode audio with decodeAudioData; clear error when the browser can't.
+- [x] Basic Pitch in a Web Worker (22,050 Hz mono), progress + cancel.
+- [x] Post-processing: min note length, merge fragments, velocity, hand assignment (M1).
+- [x] Round-trip test: synthesize audio from fixture Scores (OfflineAudioContext or a simple piano-like synth) → transcribe → note F1 (pitch exact, onset ±50 ms).
 
 Accept: F1 ≥ 0.85 monophonic, ≥ 0.70 two-hand. If missed, record the numbers; better models are phase 2.
 

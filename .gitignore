@@ -10,3 +10,6 @@ test-results/
 .claude/settings.local.json
 .claude/agent-memory-local/
 dev-dist/
+
+# Model files copied from node_modules by scripts/copy-models.mjs
+public/models/
